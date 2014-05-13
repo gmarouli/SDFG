@@ -42,4 +42,106 @@ private loc determineLock(Declaration method){
 	return lock;
 }
 
-set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) = {};
+set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
+	allMethods 
+		= { m | /m:Declaration::method(_,_,_,_,_) <- asts}
+		+ {Declaration::method(t, n, p, e, empty())[@decl=m@decl] | /m:Declaration::method(Type t,n,p,e) <- asts}
+		+ {Declaration::method(simpleType(simpleName(n)), n, p, e, b)[@decl=m@decl] | /m:Declaration::constructor(str n,p,e, b) <- asts}
+	;
+	
+	allMethods = fixCollections(allMethods);
+	
+	allMethods = visit(allMethods) {
+		case declarationExpression(Declaration::class(_)) => Expression::null()
+		case declarationExpression(Declaration::class(_,_,_,_)) => Expression::null()
+		case declarationExpression(Declaration::enum(_,_,_,_)) => Expression::null()
+		
+		case declarationStatement(Declaration::class(_)) => empty()
+		case declarationStatement(Declaration::class(_,_,_,_)) => empty()
+		case declarationStatement(Declaration::enum(_,_,_,_)) => empty()
+	};
+	
+	set[Stmt] result = {};
+	for (m:Declaration::method(_, _, parameters, _, b) <- allMethods) {
+		//determine lock
+		loc lock = unlocked;
+		for(Decl::method(id, _, l) <- decls){
+			if(id.path == m@decl.path)
+				lock = l;
+		} 
+		//set up environment with parameters
+		env = ( p@decl : m@src | p <- parameters);
+		//<methodStmts, _> = dealWithStmts(m,()); 
+		methodStmts = {};
+		//lock statements if synchronized
+		if(lock != unlocked){
+			methodStmts += {Stmt::lock(src, lock, {getIdFromStmt(s) | s <- methodStmts})};
+		}
+		result+= methodStmts;
+	}	
+	
+	return result;
+}
+
+set[Declaration] fixCollections(set[Declaration] ast) {
+	return visit (ast) {
+		case oe:methodCall(_, Expression receiver, methodName,	args):  {
+			if (isContainerInsert(receiver, methodName)) {
+				insert assignment(receiver, "=", correctInsertArg(receiver, methodName, args))
+					[@typ = receiver@typ]
+					[@src = oe@src];
+			}
+			else if(isContainerExtract(receiver, methodName)) {
+				insert receiver;
+			}
+		}
+	};
+}
+
+set[str] containerClasses =  {
+	 "/java/util/Map"
+	,"/java/util/HashMap"
+	,"/java/util/Collection"
+	,"/java/util/Set"
+	,"/java/util/HashSet"
+	,"/java/util/LinkedHashSet"
+	,"/java/util/List"
+	,"/java/util/ArrayList"
+	,"/java/util/LinkedList"
+};
+
+map[str, int] insertArgs = (
+	 "insert": 0
+	, "insertAll": 0
+	, "put": 1
+	, "putAll": 1
+	, "add": 0
+	, "addAll": 0
+);
+
+Expression correctInsertArg(Expression recv, str name, list[Expression] args) {
+	return args[insertArgs[name]];
+}
+
+
+bool isContainerInsert(Expression recv, str name) {
+	tp = (recv@typ).decl.path;
+	if (tp in containerClasses) {
+		return name in insertArgs;
+	}
+	return false;
+}
+
+bool isContainerExtract(Expression recv, str name) {
+	tp = (recv@typ).decl.path;
+	if (tp in containerClasses) {
+		switch (name) {
+			case "get": return true;	
+			case "iterator": return true;	
+			case "toArray": return true;	
+			case "entrySet": return true;	
+			case "values": return true;	
+		}	
+	}
+	return false;
+}
