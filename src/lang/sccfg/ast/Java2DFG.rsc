@@ -85,6 +85,12 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 }
 
 private tuple[set[Stmt], map[loc,set[loc]]] dealWithStmts(Declaration m , Statement b, map[loc,set[loc]] env){
-	println(b);
-	return <{},()>;
+	set[Stmt] currentBlock = {};
+	top-down-break visit(b) {
+		case s:Statement::variable(name,_,rhs): {
+			currentBlock += {Stmt::assign(s@src, s@decl, emptyId)}; //have to find the right read
+			env[s@decl] = {s@src};
+		}
+	}
+	return <currentBlock,env>;
 }
