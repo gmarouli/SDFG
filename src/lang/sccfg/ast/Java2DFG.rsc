@@ -141,6 +141,15 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 				potentialStmt += nestedReads;
 			}
 		}
+		case s:Expression::conditional(cond,ifStmts,elseStmts):{
+			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(cond), env);
+			currentBlock += unnestedStmts;
+			potentialStmt += nestedReads;
+		
+			<unnestedStmts,env, nestedReads> = branching(ifStmts, elseStmts, env);
+			currentBlock += unnestedStmts;
+			potentialStmt += nestedReads;
+		}
 	}
 	return <currentBlock,env, potentialStmt>;
 }
