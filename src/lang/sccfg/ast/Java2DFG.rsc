@@ -84,13 +84,63 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 	return result;
 }
 
-private tuple[set[Stmt], map[loc,set[loc]]] dealWithStmts(Declaration m , Statement b, map[loc,set[loc]] env){
+private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration m , Statement b, map[loc,set[loc]] env){
 	set[Stmt] currentBlock = {};
+	set[Stmt] potentialStmt = {};
 	top-down-break visit(b) {
 		case s:Statement::variable(name,_,rhs): {
+			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(rhs), env);
+			unnestedStmts += nestedReads;
 			currentBlock += {Stmt::assign(s@src, s@decl, emptyId)}; //have to find the right read
 			env[s@decl] = {s@src};
 		}
+		case s:Expression::assignment(lhs,_,rhs): {
+			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(rhs), env);
+			if(Expression::arrayAccess(ar, index) := lhs){
+				//read the assignments of the right handside
+				unnestedStmts += nestedReads;
+				currentBlock +=  unnestedStmts;
+				<unnestedStmtsIndex,env, nestedReadsIndex> = dealWithStmts(m, \expressionStatement(index), env);
+				
+				unnestedStmts += unnestedStmtsIndex + nestedReadsIndex;
+				currentBlock +=  unnestedStmts;
+				if(unnestedStmts == {})
+					currentBlock += {Stmt::assign(s@src, ar@decl, emptyId)};
+				else
+					currentBlock += {Stmt::assign(s@src, ar@decl, id) | Stmt::read(id, _, _) <- unnestedStmts}; //have to find the right read
+				env[ar@decl] = {s@src};
+				potentialStmt += {Stmt::read(s@src, ar@decl, emptyId)};
+			}
+			else if(simpleExpression(lhs)) {
+				//read the assignments of the right handside
+				unnestedStmts += nestedReads;
+				currentBlock +=  unnestedStmts;
+				if(unnestedStmts == {})
+					currentBlock += {Stmt::assign(s@src, lhs@decl, emptyId)};
+				else
+					currentBlock += {Stmt::assign(s@src, lhs@decl, id) | Stmt::read(id, _, _) <- unnestedStmts}; //have to find the right read
+				env[lhs@decl] = {s@src};
+				potentialStmt += {Stmt::read(s@src, lhs@decl, emptyId)};
+			}
+		}
+		case s:Expression::simpleName(name):{
+			potentialStmt += {Stmt::read(s@src, s@decl, emptyId)};	
+		}
 	}
-	return <currentBlock,env>;
+	return <currentBlock,env, potentialStmt>;
 }
+
+bool simpleExpression(fieldAccess(_,_,_)) = true;
+bool simpleExpression(fieldAccess(_,_)) = true;
+bool simpleExpression(qualifiedName(_,e)) = simpleExpression(e);
+bool simpleExpression(this()) = true;
+bool simpleExpression(this(_)) = true;
+bool simpleExpression(simpleName(_)) = true;
+default bool simpleExpression(Expression e) = false;
+
+bool isArray(arrayAccess(_,_)) = true;
+default bool isArray(e) = false; 
+
+Expression removeNesting(cast(_, e)) = removeNesting(e);
+Expression removeNesting(\bracket(e)) = removeNesting(e);
+default Expression removeNesting(Expression e) = e;
