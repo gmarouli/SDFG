@@ -126,10 +126,42 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 		case s:Expression::simpleName(name):{
 			potentialStmt += {Stmt::read(s@src, s@decl, emptyId)};	
 		}
+		case s:Expression::infix(lhs, operator, rhs):{
+			if(operator == "&&" || operator == "||"){
+				<unnestedStmts,env, nestedReads> = branching(lhs,rhs, env);
+				currentBlock += unnestedStmts;
+				potentialStmt += nestedReads;
+			}
+			else{
+				<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(lhs), env);
+				currentBlock += unnestedStmts;
+				potentialStmt += nestedReads;
+				<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(rhs), env);
+				currentBlock += unnestedStmts;
+				potentialStmt += nestedReads;
+			}
+		}
 	}
 	return <currentBlock,env, potentialStmt>;
 }
 
+private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] branching(Statement lhs, Statement rhs, map[loc,set[loc]] env){
+	currentBlock = {};
+	potentialStmt = {};
+	<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(lhs), env);
+	currentBlock += unnestedStmts;
+	potentialStmt += nestedReads;
+				
+	<unnestedStmts,envR, nestedReads> = dealWithStmts(m, \expressionStatement(rhs), env);
+	currentBlock += unnestedStmts;
+	potentialStmt += nestedReads;
+	for(variable <- envR){
+		if(variable in env){
+			env[variable] = env[variable] + envR[variable];
+		}
+	}
+	return <currentBlock, env, potentialStmt>;
+}
 bool simpleExpression(fieldAccess(_,_,_)) = true;
 bool simpleExpression(fieldAccess(_,_)) = true;
 bool simpleExpression(qualifiedName(_,e)) = simpleExpression(e);
