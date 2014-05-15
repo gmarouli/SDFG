@@ -90,35 +90,43 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 	top-down-break visit(b) {
 		case s:Statement::variable(name,_,rhs): {
 			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(rhs), env);
-			unnestedStmts += nestedReads;
+			currentBlock += nestedReads;
+			currentBlock += unnestedStmts;
 			currentBlock += {Stmt::assign(s@src, s@decl, emptyId)}; //have to find the right read
 			env[s@decl] = {s@src};
+			potentialStmt = {};
 		}
 		case s:Expression::assignment(lhs,_,rhs): {
 			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(rhs), env);
 			if(Expression::arrayAccess(ar, index) := lhs){
 				//read the assignments of the right handside
-				unnestedStmts += nestedReads;
+				currentBlock += nestedReads;
 				currentBlock +=  unnestedStmts;
 				<unnestedStmtsIndex,env, nestedReadsIndex> = dealWithStmts(m, \expressionStatement(index), env);
 				
-				unnestedStmts += unnestedStmtsIndex + nestedReadsIndex;
-				currentBlock +=  unnestedStmts;
-				if(unnestedStmts == {})
+				nestedReads += nestedReadsIndex;
+				currentBlock += unnestedStmtsIndex;
+				currentBlock += nestedReadsIndex;
+				if(nestedReads == {})
 					currentBlock += {Stmt::assign(s@src, ar@decl, emptyId)};
-				else
-					currentBlock += {Stmt::assign(s@src, ar@decl, id) | Stmt::read(id, _, _) <- unnestedStmts}; //have to find the right read
+				else{
+					currentBlock += {Stmt::assign(s@src, ar@decl, id) | Stmt::read(id, _, _) <- nestedReads}; //have to find the right read
+					currentBlock += {Stmt::assign(s@src, lhs@decl, id) | Stmt::call(id, _, _) <- nestedReads};	
+				}
 				env[ar@decl] = {s@src};
 				potentialStmt += {Stmt::read(s@src, ar@decl, emptyId)};
 			}
 			else if(simpleExpression(lhs)) {
 				//read the assignments of the right handside
-				unnestedStmts += nestedReads;
-				currentBlock +=  unnestedStmts;
-				if(unnestedStmts == {})
+				currentBlock += nestedReads;
+				currentBlock += unnestedStmts;
+				if(nestedReads == {}){
 					currentBlock += {Stmt::assign(s@src, lhs@decl, emptyId)};
-				else
-					currentBlock += {Stmt::assign(s@src, lhs@decl, id) | Stmt::read(id, _, _) <- unnestedStmts}; //have to find the right read
+				}
+				else{
+					currentBlock += {Stmt::assign(s@src, lhs@decl, id) | Stmt::read(id, _, _) <- nestedReads}; //have to find the right read
+					currentBlock += {Stmt::assign(s@src, lhs@decl, id) | Stmt::call(id, _, _, _) <- nestedReads};
+				}
 				env[lhs@decl] = {s@src};
 				potentialStmt += {Stmt::read(s@src, lhs@decl, emptyId)};
 			}
@@ -128,7 +136,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 		}
 		case s:Expression::infix(lhs, operator, rhs):{
 			if(operator == "&&" || operator == "||"){
-				<unnestedStmts,env, nestedReads> = branching(lhs,rhs, env);
+				<unnestedStmts, env, nestedReads> = branching(lhs,rhs, env);
 				currentBlock += unnestedStmts;
 				potentialStmt += nestedReads;
 			}
@@ -149,6 +157,21 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 			<unnestedStmts,env, nestedReads> = branching(ifStmts, elseStmts, env);
 			currentBlock += unnestedStmts;
 			potentialStmt += nestedReads;
+		}
+		case s:Expression::methodCall(isSuper,name,args):{
+			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \methodCall(isSuper, \this(), name, args), env);
+			currentBlock += unnestedStmts;
+			potentialStmt += nestedReads;
+		}
+		case s:Expression::methodCall(isSuper, receiver, name, args):{
+			for(arg <- args){
+				<unnestedStmts,env, nestedReads> = dealWithStmts(m, expressionStatement(arg), env);
+				currentBlock += nestedReads;
+				currentBlock += unnestedStmts;
+			}
+			currentBlock+={Stmt::call(s@src, receiver@decl, s@decl, parameter) | read(parameter, _, _) <- nestedReads};
+			currentBlock+={Stmt::call(s@src, receiver@decl, s@decl, parameter) | call(parameter, _, _,_) <- nestedReads};
+			
 		}
 	}
 	return <currentBlock,env, potentialStmt>;
