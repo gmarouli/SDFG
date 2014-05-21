@@ -43,11 +43,18 @@ private loc determineLock(Declaration method){
 	return lock;
 }
 
+private map[str, list[Statement]] gatherInitializations(set[Declaration] asts) 
+	= (c@decl.path : [expressionStatement(v) | field(t,frags) <- b, v <- frags] | /c:class(name, _, _, b) <- asts);
+
 set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
+
+	initialized = gatherInitializations(asts);
+	
 	allMethods 
 		= { m | /m:Declaration::method(_,_,_,_,_) <- asts}
 		+ {Declaration::method(t, n, p, e, empty())[@decl=m@decl] | /m:Declaration::method(Type t,n,p,e) <- asts}
-		+ {Declaration::method(simpleType(simpleName(n)), n, p, e, b)[@decl=m@decl] | /m:Declaration::constructor(str n,p,e, b) <- asts}
+		+ {Declaration::method(simpleType(simpleName(n)), n, p, e, Statement::block((initialized[substring(m@decl.path,0,findLast(m@decl.path,"/"))] ? []) + b))[@decl=m@decl] | /m:Declaration::constructor(str n,p,e,  Statement::block(b)) <- asts}
+		+ {Declaration::method(simpleType(simpleName(n)), n, [], [], block(initialized[c@decl.path] ? []))[@decl=(c@decl)[scheme="java+constructor"] + "<n>()"] | /c:class(n, _, _, b) <- asts, !(Declaration::constructor(_, _, _, _) <- b)}
 	;
 	
 	allMethods = fixCollections(allMethods);
