@@ -99,7 +99,12 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(rhs), env);
 			currentBlock += nestedReads;
 			currentBlock += unnestedStmts;
-			currentBlock += {Stmt::assign(s@src, s@decl, emptyId)}; 
+			if(nestedReads == {})
+				currentBlock += {Stmt::assign(s@src, s@decl, emptyId)};
+			else{
+				currentBlock += {Stmt::assign(s@src, s@decl, id) | Stmt::read(id, _, _) <- nestedReads}; //have to find the right read
+				currentBlock += {Stmt::assign(s@src, s@decl, id) | Stmt::call(id, _, _) <- nestedReads};	
+			}
 			env[s@decl] = {s@src};
 			potentialStmt = {};
 		}
