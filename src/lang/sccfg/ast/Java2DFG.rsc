@@ -99,7 +99,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(rhs), env);
 			currentBlock += nestedReads;
 			currentBlock += unnestedStmts;
-			currentBlock += {Stmt::assign(s@src, s@decl, emptyId)}; //have to find the right read
+			currentBlock += {Stmt::assign(s@src, s@decl, emptyId)}; 
 			env[s@decl] = {s@src};
 			potentialStmt = {};
 		}
@@ -179,6 +179,25 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 			currentBlock+={Stmt::call(s@src, receiver@decl, s@decl, parameter) | read(parameter, _, _) <- nestedReads};
 			currentBlock+={Stmt::call(s@src, receiver@decl, s@decl, parameter) | call(parameter, _, _,_) <- nestedReads};
 			
+		}
+		case s:Statement::\if(cond,ifStmts):{
+			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(cond), env);
+			currentBlock += unnestedStmts + nestedReads;
+			
+			<unnestedStmts,envR, nestedReads> = dealWithStmts(m, ifStmts, env);
+			currentBlock += unnestedStmts + nestedReads;
+			for(variable <- envR){
+				if(variable in env){
+					env[variable] = env[variable] + envR[variable];
+				}
+			}
+		}
+		case s:Statement::\if(cond,ifStmts,elseStmts):{
+			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(cond), env);
+			currentBlock += unnestedStmts + nestedReads;
+		
+			<unnestedStmts,env, nestedReads> = branching(ifStmts, elseStmts, env);
+			currentBlock += unnestedStmts + nestedReads;
 		}
 	}
 	return <currentBlock,env, potentialStmt>;
