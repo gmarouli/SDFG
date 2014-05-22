@@ -32,11 +32,11 @@ private loc determineLock(Declaration method){
 	loc lock = unlocked;
 	if(synchronized() in  (method@modifiers ? {})){
 		if(static() in (method@modifiers ? {})){
-			str lockPath = substring(method@decl.path,0,findLast(method@decl.path,"/")) + ".class";
+			str lockPath = extractClassName(method@decl) + ".class";
 			lock = lock+lockPath;
 		}
 		else{
-			str lockPath = substring(method@decl.path,0,findLast(method@decl.path,"/")+1) + "this";
+			str lockPath = extractClassName(method@decl) + "/this";
 			lock = lock+lockPath;
 		}
 	}
@@ -49,11 +49,12 @@ private map[str, list[Statement]] gatherInitializations(set[Declaration] asts)
 set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 
 	initialized = gatherInitializations(asts);
-	
+	fieldsPerClass = ( c@decl.path : {v@decl | field(t,frags) <- b, v <- frags}| /c:class(name, _, _, b) <- asts);
+
 	allMethods 
 		= { m | /m:Declaration::method(_,_,_,_,_) <- asts}
 		+ {Declaration::method(t, n, p, e, empty())[@decl=m@decl] | /m:Declaration::method(Type t,n,p,e) <- asts}
-		+ {Declaration::method(simpleType(simpleName(n)), n, p, e, Statement::block((initialized[substring(m@decl.path,0,findLast(m@decl.path,"/"))] ? []) + b))[@decl=m@decl] | /m:Declaration::constructor(str n,p,e,  Statement::block(b)) <- asts}
+		+ {Declaration::method(simpleType(simpleName(n)), n, p, e, Statement::block((initialized[extractClassName(m@decl)] ? []) + b))[@decl=m@decl] | /m:Declaration::constructor(str n,p,e,  Statement::block(b)) <- asts}
 		+ {Declaration::method(simpleType(simpleName(n)), n, [], [], block(initialized[c@decl.path] ? []))[@decl=(c@decl)[scheme="java+constructor"] + "<n>()"] | /c:class(n, _, _, b) <- asts, !(Declaration::constructor(_, _, _, _) <- b)}
 	;
 	
@@ -77,8 +78,8 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 			if(id.path == m@decl.path)
 				lock = l;
 		} 
-		//set up environment with parameters
-		map[loc, set[loc]] env = ( p@decl : {p@src} | p <- parameters);
+		//set up environment with parameters and fields
+		map[loc, set[loc]] env = ( p@decl : {p@src} | p <- parameters) + ( field : {emptyId} | field <- fieldsPerClass[extractClassName(m@decl)]);
 		<methodStmts, _, _> = dealWithStmts(m, b, env); 
 		
 		//lock statements if synchronized
@@ -96,7 +97,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 	set[Stmt] potentialStmt = {};
 	top-down-break visit(b) {
 		case s:Expression::simpleName(name):{
-			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- (env[s@decl] ? {emptyId})};	
+			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- env[s@decl]};	
 		}
 		case s:Expression::assignment(lhs,_,rhs): {
 			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(rhs), env);
@@ -116,7 +117,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 					currentBlock += {Stmt::assign(s@src, ar@decl, id) | Stmt::call(id, _, _) <- nestedReads};	
 				}
 				env[ar@decl] = {s@src};
-				potentialStmt += {Stmt::read(s@src, ar@decl, writtenBy) | writtenBy <- (env[ar@decl] ? {emptyId}) };
+				potentialStmt += {Stmt::read(lhs@src, ar@decl, writtenBy) | writtenBy <- env[ar@decl]};
 			}
 			else if(simpleExpression(lhs)) {
 				//read the assignments of the right handside
@@ -130,7 +131,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 					currentBlock += {Stmt::assign(s@src, lhs@decl, id) | Stmt::call(id, _, _, _) <- nestedReads};
 				}
 				env[lhs@decl] = {s@src};
-				potentialStmt += {Stmt::read(s@src, lhs@decl, writtenBy) | writtenBy <- (env[lhs@decl] ? {emptyId})};
+				potentialStmt += {Stmt::read(lhs@src, lhs@decl, writtenBy) | writtenBy <- env[lhs@decl]};
 			}
 		}
 		case s:Expression::infix(lhs, operator, rhs):{
@@ -189,7 +190,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 			currentBlock += unnestedStmts + nestedReads;
 			
 			<unnestedStmts,envR, nestedReads> = dealWithStmts(m, ifStmts, env);
-			currentBlock += unnestedStmts + nestedReads;
+			currentBlock += unnestedStmts;
 			for(variable <- envR){
 				if(variable in env){
 					env[variable] = env[variable] + envR[variable];
@@ -201,8 +202,9 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 			currentBlock += unnestedStmts + nestedReads;
 		
 			<unnestedStmts,env, nestedReads> = branching(ifStmts, elseStmts, env);
-			currentBlock += unnestedStmts + nestedReads;
+			currentBlock += unnestedStmts;
 		}
+		
 	}
 	return <currentBlock,env, potentialStmt>;
 }
@@ -238,3 +240,7 @@ default bool isArray(e) = false;
 Expression removeNesting(cast(_, e)) = removeNesting(e);
 Expression removeNesting(\bracket(e)) = removeNesting(e);
 default Expression removeNesting(Expression e) = e;
+
+private str extractClassName(loc method) 
+	= substring(method.path,0,findLast(method.path,"/"));
+	
