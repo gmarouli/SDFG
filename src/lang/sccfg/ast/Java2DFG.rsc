@@ -8,6 +8,7 @@ import lang::sccfg::ast::DataFlowLanguage;
 import lang::java::m3::TypeSymbol;
 import lang::java::jdt::m3::AST;
 import lang::sccfg::ast::util::ContainersManagement;
+import  lang::sccfg::ast::util::ControlFlowHelpers;
 
 Program createDFG(loc project) = createDFG(createAstsFromEclipseProject(project, true));
 
@@ -230,23 +231,6 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 	return <currentBlock,env, potentialStmt>;
 }
 
-private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] branching(Statement lhs, Statement rhs, map[loc,set[loc]] env){
-	currentBlock = {};
-	potentialStmt = {};
-	<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(lhs), env);
-	currentBlock += unnestedStmts;
-	potentialStmt += nestedReads;
-				
-	<unnestedStmts,envR, nestedReads> = dealWithStmts(m, \expressionStatement(rhs), env);
-	currentBlock += unnestedStmts;
-	potentialStmt += nestedReads;
-	for(variable <- envR){
-		if(variable in env){
-			env[variable] = env[variable] + envR[variable];
-		}
-	}
-	return <currentBlock, env, potentialStmt>;
-}
 bool simpleExpression(fieldAccess(_,_,_)) = true;
 bool simpleExpression(fieldAccess(_,_)) = true;
 bool simpleExpression(qualifiedName(_,e)) = simpleExpression(e);
