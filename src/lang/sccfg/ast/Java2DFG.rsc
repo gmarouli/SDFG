@@ -204,7 +204,28 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 			<unnestedStmts,env, nestedReads> = branching(ifStmts, elseStmts, env);
 			currentBlock += unnestedStmts;
 		}
-		
+		case s:Statement::\while(cond,stmts):{
+			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(cond), env);
+			currentBlock += unnestedStmts + nestedReads;
+
+			<unnestedStmts, loopedEnv, nestedReads> = dealWithStmts(m, stmts, env);
+			currentBlock += unnestedStmts;
+			
+			<unnestedStmts, loopedEnv, nestedReads> = dealWithStmts(m, \expressionStatement(cond), loopedEnv);
+			currentBlock += unnestedStmts + nestedReads;
+			
+			<unnestedStmts, loopedEnv, nestedReads> = dealWithStmts(m, stmts, loopedEnv);
+			currentBlock += unnestedStmts;
+			
+			<unnestedStmts, loopedEnv, nestedReads> = dealWithStmts(m, \expressionStatement(cond), loopedEnv);
+			currentBlock += unnestedStmts + nestedReads;
+			
+			for(variable <- loopedEnv){
+				if(variable in env){
+					env[variable] = env[variable] + loopedEnv[variable];
+				}
+			}
+		}
 	}
 	return <currentBlock,env, potentialStmt>;
 }
