@@ -192,7 +192,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
 			currentBlock += unnestedStmts + nestedReads;
 			
-			<unnestedStmts,envR, _, continueEnv, breakEnv> = dealWithStmts(m, ifStmts, env);
+			<unnestedStmts,envR, n, continueEnv, breakEnv> = dealWithStmts(m, ifStmts, env);
 			currentBlock += unnestedStmts;
 			potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
 			potentialBreakEnv = mergeInBlockEnvironments(breakEnv,potentialBreakEnv);
