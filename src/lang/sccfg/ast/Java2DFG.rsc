@@ -192,11 +192,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 			
 			<unnestedStmts,envR, nestedReads> = dealWithStmts(m, ifStmts, env);
 			currentBlock += unnestedStmts;
-			for(variable <- envR){
-				if(variable in env){
-					env[variable] = env[variable] + envR[variable];
-				}
-			}
+			env = mergeEnvironments(env, envR);
 		}
 		case s:Statement::\if(cond,ifStmts,elseStmts):{
 			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(cond), env);
@@ -206,6 +202,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 			currentBlock += unnestedStmts;
 		}
 		case s:Statement::\while(cond,stmts):{
+			
 			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \expressionStatement(cond), env);
 			currentBlock += unnestedStmts + nestedReads;
 
@@ -221,11 +218,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt]] dealWithStmts(Declaration
 			<unnestedStmts, loopedEnv, nestedReads> = dealWithStmts(m, \expressionStatement(cond), loopedEnv);
 			currentBlock += unnestedStmts + nestedReads;
 			
-			for(variable <- loopedEnv){
-				if(variable in env){
-					env[variable] = env[variable] + loopedEnv[variable];
-				}
-			}
+			env = mergeEnvironments(env,loopedEnv);
 		}
 	}
 	return <currentBlock,env, potentialStmt>;
@@ -248,4 +241,13 @@ default Expression removeNesting(Expression e) = e;
 
 private str extractClassName(loc method) 
 	= substring(method.path,0,findLast(method.path,"/"));
+	
+private map[loc,set[loc]] mergeEnvironments(map[loc,set[loc]] env, map[loc,set[loc]] tempEnv){
+	for(variable <- tempEnv){
+		if(variable in env){
+			env[variable] = env[variable] + tempEnv[variable];
+		}
+	}
+	return env;
+}
 	
