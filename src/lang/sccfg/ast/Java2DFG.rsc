@@ -233,10 +233,33 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 			
 			env = mergeEnvironments(env,exitEnv);
 		}
+		case s:Statement::\do(stmts,cond):{
+
+			//executed once all the reads and assigns added missing connections to itself
+			<unnestedStmts, env, nestedReads, continueEnv, breakEnv> = dealWithStmts(m, stmts, env);
+			currentBlock += unnestedStmts;
+			
+			//include continue
+			loopedEnv = mergeInBlockEnvironments(env, continueEnv);
+			
+			//running the condition after one loop getting all the connections from statements and continue command
+			<unnestedStmts, exitEnv, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
+			currentBlock += unnestedStmts + nestedReads;
+
+			<unnestedStmts, loopedEnv, n, _, _> = dealWithStmts(m, stmts, exitEnv);
+			currentBlock += unnestedStmts;
+			
+			exitEnv = mergeInBlockEnvironments(exitEnv,breakEnv);
+			
+			env = mergeEnvironments(env,exitEnv);
+		}
 		case s:Statement::\continue():{
 			potentialContinueEnv = mergeInBlockEnvironments(env,potentialContinueEnv);
 		}
 		case s:Statement::\break(""):{
+			potentialBreakEnv = mergeInBlockEnvironments(env,potentialBreakEnv);
+		}
+		case s:Statement::\break():{
 			potentialBreakEnv = mergeInBlockEnvironments(env,potentialBreakEnv);
 		}
 	}
