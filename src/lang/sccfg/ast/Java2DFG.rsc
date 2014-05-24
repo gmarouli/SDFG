@@ -253,6 +253,37 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 			
 			env = mergeEnvironments(env,exitEnv);
 		}
+		case s:Statement::\for(initializers, cond, updaters, stmts):{
+
+			<unnestedStmts, env, nestedReads, _, _> = dealWithStmts(m, \block([\expressionStatement(i) | i <- initializers]), env);
+			currentBlock += unnestedStmts;
+			
+			//running the condition after one loop getting all the connections from statements and continue command
+			<unnestedStmts, env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
+			currentBlock += unnestedStmts + nestedReads;
+
+			//executed once all the reads and assigns added missing connections to itself
+			<unnestedStmts, loopedEnv, nestedReads, continueEnv, breakEnv> = dealWithStmts(m, stmts, env);
+			currentBlock += unnestedStmts;
+			
+			//include continue
+			loopedEnv = mergeInBlockEnvironments(loopedEnv, continueEnv);
+			
+			//running the condition after one loop getting all the connections from statements and continue command
+			<unnestedStmts, loopedEnv, nestedReads, _, _> = dealWithStmts(m, \block([\expressionStatement(u) | u <- updaters]), loopedEnv);
+			currentBlock += unnestedStmts;
+
+			//running the condition after one loop getting all the connections from statements and continue command
+			<unnestedStmts, exitEnv, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), loopedEnv);
+			currentBlock += unnestedStmts + nestedReads;
+
+			<unnestedStmts, loopedEnv, n, _, _> = dealWithStmts(m, stmts, exitEnv);
+			currentBlock += unnestedStmts;
+			
+			exitEnv = mergeInBlockEnvironments(exitEnv,breakEnv);
+			
+			env = mergeEnvironments(env,exitEnv);
+		}
 		case s:Statement::\continue():{
 			potentialContinueEnv = mergeInBlockEnvironments(env,potentialContinueEnv);
 		}
