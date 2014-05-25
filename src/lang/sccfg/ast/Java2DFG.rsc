@@ -153,6 +153,20 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 				fail;
 			}
 		}
+		case s:Expression::postfix(operand, operator):{
+			println(s);
+			if(operator == "++" || operator == "--"){
+				<unnestedStmts, env, nestedReads, _, _> = dealWithStmts(m,\expressionStatement(operand), env);
+				currentBlock += unnestedStmts;
+				potentialStmt += nestedReads;
+				currentBlock += {Stmt::assign(s@src, operand@decl, id) | read(id,_,_) <- nestedReads};
+				env[operand@decl] = {s@src};
+				potentialStmt += {Stmt::read(operand@src, operand@decl, writtenBy) | writtenBy <- env[operand@decl]};				
+			}
+			else{
+				fail;
+			}
+		}
 		case s:Expression::conditional(cond,ifExpr,elseExpr):{
 			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
 			currentBlock += unnestedStmts;
