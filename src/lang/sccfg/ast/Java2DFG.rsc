@@ -102,6 +102,12 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 		case s:Expression::simpleName(name):{
 			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- env[s@decl]};	
 		}
+		case s:Expression::fieldAccess(_,_,_):{
+			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- env[s@decl]};	
+		}
+		case s:Expression::fieldAccess(_,_):{
+			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- env[s@decl]};	
+		}
 		case s:Expression::assignment(lhs,_,rhs): {
 			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(rhs), env);
 			if(Expression::arrayAccess(ar, index) := lhs){
@@ -144,12 +150,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 				potentialStmt += nestedReads;
 			}
 			else{
-				<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(lhs), env);
-				currentBlock += unnestedStmts;
-				potentialStmt += nestedReads;
-				<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(rhs), env);
-				currentBlock += unnestedStmts;
-				potentialStmt += nestedReads;
+				fail;
 			}
 		}
 		case s:Expression::conditional(cond,ifExpr,elseExpr):{
