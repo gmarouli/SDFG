@@ -102,18 +102,22 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 		case s:Expression::simpleName(name):{
 			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- env[s@decl]};	
 		}
-		case s:Expression::fieldAccess(_,_,_):{
-			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- env[s@decl]};	
+		case s:Expression::this():{
+			potentialStmt += {Stmt::read(s@src, |java+field:///|+ extractClassName(m@decl)+"/this", emptyId)};	
+		}
+		case s:Expression::fieldAccess(_,exp,_):{
+			<unnestedStmts, env, nestedRead,_,_> = dealWithStmts(m, \expressionStatement(exp), env);
+			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- env[s@decl]} + {Stmt::read(s@src, s@decl, dependOn) | read(dependOn,_,_) <- nestedRead};	
 		}
 		case s:Expression::fieldAccess(_,_):{
 			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- env[s@decl]};	
 		}
 		case s:Expression::assignment(lhs,_,rhs): {
 			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(rhs), env);
+			currentBlock += nestedReads;
+			currentBlock += unnestedStmts;
 			if(Expression::arrayAccess(ar, index) := lhs){
 				//read the assignments of the right handside
-				currentBlock += nestedReads;
-				currentBlock +=  unnestedStmts;
 				<unnestedStmtsIndex,env, nestedReadsIndex, _, _> = dealWithStmts(m, \expressionStatement(index), env);
 				
 				nestedReads += nestedReadsIndex;
@@ -130,8 +134,6 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 			}
 			else if(simpleExpression(lhs)) {
 				//read the assignments of the right handside
-				currentBlock += nestedReads;
-				currentBlock += unnestedStmts;
 				if(nestedReads == {}){
 					currentBlock += {Stmt::assign(s@src, lhs@decl, emptyId)};
 				}
@@ -154,7 +156,6 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 			}
 		}
 		case s:Expression::postfix(operand, operator):{
-			println(s);
 			if(operator == "++" || operator == "--"){
 				<unnestedStmts, env, nestedReads, _, _> = dealWithStmts(m,\expressionStatement(operand), env);
 				currentBlock += unnestedStmts;
@@ -188,8 +189,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 				currentBlock += unnestedStmts;
 			}
 			currentBlock+={Stmt::call(s@src, receiver@decl, s@decl, parameter) | read(parameter, _, _) <- nestedReads};
-			currentBlock+={Stmt::call(s@src, receiver@decl, s@decl, parameter) | call(parameter, _, _,_) <- nestedReads};
-			
+			currentBlock+={Stmt::call(s@src, receiver@decl, s@decl, parameter) | call(parameter, _, _, _) <- nestedReads};	
 		}
 		case s:Statement::variable(name,_,rhs): {
 			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(rhs), env);
@@ -202,7 +202,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 			}
 			env[s@decl] = {s@src};
 			potentialStmt = {};
-		}
+		}	
 		case s:Statement::\if(cond,ifStmts):{
 			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
 			currentBlock += unnestedStmts + nestedReads;
@@ -330,3 +330,10 @@ default Expression removeNesting(Expression e) = e;
 private str extractClassName(loc method) 
 	= substring(method.path,0,findLast(method.path,"/"));
 	
+private loc getIdFromStmt(Stmt::read(id, _, _)) = id;
+private loc getIdFromStmt(Stmt::newAssign(id, _, _, _)) = id;
+private loc getIdFromStmt(Stmt::assign(id, _, _)) = id;
+private loc getIdFromStmt(Stmt::call(id, _, _, _)) = id;
+private loc getIdFromStmt(Stmt::lock(id, _, _)) = id;
+
+private loc getDeclFromRead(Stmt::read(_,decl,_)) = decl;
