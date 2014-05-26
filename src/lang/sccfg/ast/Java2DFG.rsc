@@ -202,6 +202,19 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 			}
 			env[s@decl] = {s@src};
 			potentialStmt = {};
+		}
+		case s:Statement::synchronizedStatement(expr, stmts):{
+			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(expr), env);
+			currentBlock += unnestedStmts + nestedReads;
+			vlock = getDeclFromRead(getOneFrom(nestedReads));	
+						
+			<unnestedStmts,env, nestedReads, continueEnv, breakEnv> = dealWithStmts(m, stmts, env);
+			currentBlock += unnestedStmts;
+			potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
+			potentialBreakEnv = mergeInBlockEnvironments(breakEnv,potentialBreakEnv);
+			
+			currentBlock += {Stmt::lock(s@src, vlock, {getIdFromStmt(id) | id <- unnestedStmts})};
+			
 		}	
 		case s:Statement::\if(cond,ifStmts):{
 			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
