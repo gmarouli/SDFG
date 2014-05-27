@@ -317,15 +317,15 @@ tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[loc,set[lo
 			return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
 			
 		}
-		//case s:Statement::\break(""):{
-		//	potentialBreakEnv = mergeInBlockEnvironments(env,potentialBreakEnv);
-		//	return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
-		//	
-		//}
-		//case s:Statement::\break():{
-		//	potentialBreakEnv = mergeInBlockEnvironments(env,potentialBreakEnv);
-		//	return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
-		//}
+		case s:Statement::\break(""):{
+			potentialBreakEnv = mergeInBlockEnvironments(env,potentialBreakEnv);
+			return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
+			
+		}
+		case s:Statement::\break():{
+			potentialBreakEnv = mergeInBlockEnvironments(env,potentialBreakEnv);
+			return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
+		}
 		//case s:Statement::\return():{
 		//	return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
 		//}
