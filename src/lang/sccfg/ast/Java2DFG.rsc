@@ -201,7 +201,6 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 				currentBlock += {Stmt::assign(s@src, s@decl, id) | Stmt::call(id, _, _) <- nestedReads};	
 			}
 			env = setVariableDependencies(env, s@decl, {s@src});
-			println(env);
 			potentialStmt = {};
 		}
 		case s:Statement::synchronizedStatement(expr, stmts):{
@@ -232,8 +231,13 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), env);
 			currentBlock += unnestedStmts + nestedReads;
 		
-			<unnestedStmts, nestedReads, env> = branching(m, ifStmts, elseStmts, env);
+			<unnestedStmts, nestedReads, envIf> = dealWithStmts(m, ifStmts, env);
 			currentBlock += unnestedStmts;
+			
+			<unnestedStmts, nestedReads, envElse> = dealWithStmts(m, elseStmts, env);
+			currentBlock += unnestedStmts;
+			
+			env = mergeEnvironments(envIf, envElse);
 			//potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
 			//potentialBreakEnv = mergeInBlockEnvironments(breakEnv,potentialBreakEnv);
 			
