@@ -93,7 +93,7 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 	return result;
 }
 
-private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[loc,set[loc]]] dealWithStmts(Declaration m , Statement b, map[loc,set[loc]] env){
+tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[loc,set[loc]]] dealWithStmts(Declaration m , Statement b, map[loc,set[loc]] env){
 	set[Stmt] currentBlock = {};
 	set[Stmt] potentialStmt = {};
 	map[loc,set[loc]] potentialContinueEnv = ();
@@ -147,7 +147,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 		}
 		case s:Expression::infix(lhs, operator, rhs):{
 			if(operator == "&&" || operator == "||"){
-				<unnestedStmts, env, nestedReads, _, _> = branching(lhs,rhs, env);
+				<unnestedStmts, env, nestedReads, _, _> = branching(m, lhs, rhs, env);
 				currentBlock += unnestedStmts;
 				potentialStmt += nestedReads;
 			}
@@ -173,7 +173,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 			currentBlock += unnestedStmts;
 			potentialStmt += nestedReads;
 		
-			<unnestedStmts,env, nestedReads, _, _> = branching(ifStmts, elseStmts, env);
+			<unnestedStmts,env, nestedReads, _, _> = branching(m, ifStmts, elseStmts, env);
 			currentBlock += unnestedStmts;
 			potentialStmt += nestedReads;
 		}
@@ -231,7 +231,7 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
 			currentBlock += unnestedStmts + nestedReads;
 		
-			<unnestedStmts,env, nestedReads, continueEnv, breakEnv> = branching(ifStmts, elseStmts, env);
+			<unnestedStmts,env, nestedReads, continueEnv, breakEnv> = branching(m, ifStmts, elseStmts, env);
 			currentBlock += unnestedStmts;
 			potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
 			potentialBreakEnv = mergeInBlockEnvironments(breakEnv,potentialBreakEnv);
@@ -314,13 +314,26 @@ private tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[lo
 		}
 		case s:Statement::\continue():{
 			potentialContinueEnv = mergeInBlockEnvironments(env,potentialContinueEnv);
+			return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
+			
 		}
-		case s:Statement::\break(""):{
-			potentialBreakEnv = mergeInBlockEnvironments(env,potentialBreakEnv);
-		}
-		case s:Statement::\break():{
-			potentialBreakEnv = mergeInBlockEnvironments(env,potentialBreakEnv);
-		}
+		//case s:Statement::\break(""):{
+		//	potentialBreakEnv = mergeInBlockEnvironments(env,potentialBreakEnv);
+		//	return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
+		//	
+		//}
+		//case s:Statement::\break():{
+		//	potentialBreakEnv = mergeInBlockEnvironments(env,potentialBreakEnv);
+		//	return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
+		//}
+		//case s:Statement::\return():{
+		//	return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
+		//}
+		//case s:Statement::\return(exp):{
+		//	<unnestedStmts, env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
+		//	currentBlock += unnestedStmts + nestedReads;
+		//	return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
+		//}
 	}
 	return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
 }

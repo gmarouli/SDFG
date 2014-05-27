@@ -2,21 +2,22 @@ module lang::sccfg::ast::util::ControlFlowHelpers
 
 import IO;
 import lang::sccfg::ast::DataFlowLanguage;
+import lang::sccfg::ast::Java2DFG;
 import lang::java::m3::TypeSymbol;
 import lang::java::jdt::m3::AST;
 
-tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[loc,set[loc]]] branching(Statement lhs, Statement rhs, map[loc,set[loc]] env){
+tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[loc,set[loc]]] branching(Declaration m, Statement branch1, Statement branch2, map[loc,set[loc]] env){
 	currentBlock = {};
 	potentialStmt = {};
 	map[loc,set[loc]] potentialContinueEnv = ();
 	map[loc,set[loc]] potentialBreakEnv = ();
-	<unnestedStmts,env, nestedReads, continueEnv, breakEnv> = dealWithStmts(m, \expressionStatement(lhs), env);
+	<unnestedStmts,env, nestedReads, continueEnv, breakEnv> = dealWithStmts(m, branch1, env);
 	currentBlock += unnestedStmts;
 	potentialStmt += nestedReads;
 	potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
 	potentialBreakEnv = mergeInBlockEnvironments(breakEnv,potentialBreakEnv);
 				
-	<unnestedStmts,envR, nestedReads, continueEnv, breakEnv> = dealWithStmts(m, \expressionStatement(rhs), env);
+	<unnestedStmts,envR, nestedReads, continueEnv, breakEnv> = dealWithStmts(m, branch2, env);
 	currentBlock += unnestedStmts;
 	potentialStmt += nestedReads;
 	potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
