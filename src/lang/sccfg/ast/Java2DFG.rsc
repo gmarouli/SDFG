@@ -210,8 +210,6 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 						
 			<unnestedStmts, nestedReads, env> = dealWithStmts(m, stmts, env);
 			currentBlock += unnestedStmts;
-			//potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
-			//potentialBreakEnv = mergeInBlockEnvironments(breakEnv,potentialBreakEnv);
 			
 			currentBlock += {Stmt::lock(s@src, vlock, {getIdFromStmt(id) | id <- unnestedStmts})};
 			
@@ -222,8 +220,6 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			
 			<unnestedStmts, n, envR> = dealWithStmts(m, ifStmts, env);
 			currentBlock += unnestedStmts;
-			//potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
-			//potentialBreakEnv = mergeInBlockEnvironments(breakEnv,potentialBreakEnv);
 			
 			env = mergeEnvironments(env, envR);
 		}
@@ -238,8 +234,6 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			currentBlock += unnestedStmts;
 			
 			env = mergeEnvironments(envIf, envElse);
-			//potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
-			//potentialBreakEnv = mergeInBlockEnvironments(breakEnv,potentialBreakEnv);
 			
 		}
 		case s:Statement::\while(cond,stmts):{
@@ -335,14 +329,14 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			//to get the environment of different break statements
 			return <currentBlock, potentialStmt, addToBreakEnvironment(env)>;		
 		}
-		//case s:Statement::\return():{
-		//	return <currentBlock, potentialStmt, addToReturnEnvironment(env)>;
-		//}
-		//case s:Statement::\return(exp):{
-		//	<unnestedStmts, env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
-		//	currentBlock += unnestedStmts + nestedReads;
-		//	return <currentBlock, potentialStmt, addToReturnEnvironment(env)>;
-		//}
+		case s:Statement::\return():{
+			return <currentBlock, potentialStmt, addToReturnEnvironment(env)>;
+		}
+		case s:Statement::\return(exp):{
+			<unnestedStmts, env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
+			currentBlock += unnestedStmts + nestedReads;
+			return <currentBlock, potentialStmt, addToReturnEnvironment(env)>;
+		}
 	}
 	return <currentBlock, potentialStmt, env>;
 }
