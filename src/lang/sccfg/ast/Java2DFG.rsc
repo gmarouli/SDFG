@@ -239,7 +239,8 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 		case s:Statement::\while(cond,stmts):{
 			
 			//executed at least once and added to the env, no branching
-			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), env);
+			previousHelpingEnvironment = env;
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), environment(getCurrentEnvironment(env),(),(),getreturnEnvironment(env)));
 			currentBlock += unnestedStmts + nestedReads;
 
 			//executed once all the reads and assigns added missing connections to itself
@@ -259,13 +260,13 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			exitEnv = mergeBreak(exitEnv);
 			
 			env = mergeEnvironments(env,exitEnv);
-			env = resetContinueEnvironment(env);
-			env = resetBreakEnvironment(env);
+			env = resetHelpingEnvironment(env,previousHelpingEnvironment);
 		}
 		case s:Statement::\do(stmts,cond):{
-
+		
+			previousHelpingEnvironment = env;
 			//executed once all the reads and assigns added missing connections to itself
-			<unnestedStmts, nestedReads, env> = dealWithStmts(m, stmts, env);
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, stmts, envinronment(getCurrentEnvironment(env),(),(),getreturnEnvironment(env)));
 			currentBlock += unnestedStmts;
 			
 			//include continue
@@ -281,12 +282,12 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			exitEnv = mergeBreak(exitEnv);
 			
 			env = mergeEnvironments(env,exitEnv);
-			env = resetContinueEnvironment(env);
-			env = resetBreakEnvironment(env);
+			env = resetHelpingEnvironment(env,previousHelpingEnvironment);
 		}
 		case s:Statement::\for(initializers, cond, updaters, stmts):{
 
-			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \block([\expressionStatement(i) | i <- initializers]), env);
+			previousHelpingEnvironment = env;
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \block([\expressionStatement(i) | i <- initializers]), envinronment(getCurrentEnvironment(env),(),(),getreturnEnvironment(env)));
 			currentBlock += unnestedStmts;
 			
 			//running the condition after one loop getting all the connections from statements and continue command
@@ -314,8 +315,7 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			exitEnv = mergeBreak(exitEnv);
 			
 			env = mergeEnvironments(env,exitEnv);
-			env = resetContinueEnvironment(env);
-			env = resetBreakEnvironment(env);			
+			env = resetHelpingEnvironment(env,previousHelpingEnvironment);			
 		}
 		case s:Statement::\continue():{
 			return <currentBlock, potentialStmt, addToContinueEnvironment(env)>;

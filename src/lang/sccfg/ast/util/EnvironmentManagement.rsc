@@ -55,11 +55,8 @@ Environment mergeContinue(environment(env, contEnv, brEnv, retEnv))
 Environment mergeBreak(environment(env, contEnv, brEnv, retEnv)) 
 	= environment(mergeInBlockEnvironments(env, brEnv), contEnv, brEnv, retEnv);
 	
-Environment resetContinueEnvironment(environment(env, _, brEnv, retEnv))
-	= environment(env, (), brEnv, retEnv);
-
-Environment resetBreakEnvironment(environment(env, contEnv, _, retEnv)) 
-	= environment(env, contEnv, (), retEnv);
+Environment resetHelpingEnvironment(environment(env, _, _, retEnv), environment(_, contEnv, brEnv, _))
+	= environment(env, contEnv, brEnv, retEnv);
 	
 Environment addToContinueEnvironment(environment(env, contEnv, brEnv, retEnv))
 	= environment(env, mergeInBlockEnvironments(env, contEnv), brEnv, retEnv);
