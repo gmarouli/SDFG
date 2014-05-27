@@ -8,7 +8,8 @@ import lang::sccfg::ast::DataFlowLanguage;
 import lang::java::m3::TypeSymbol;
 import lang::java::jdt::m3::AST;
 import lang::sccfg::ast::util::ContainersManagement;
-import  lang::sccfg::ast::util::ControlFlowHelpers;
+import lang::sccfg::ast::util::EnvironmentManagement;
+import lang::sccfg::ast::util::ControlFlowHelpers;
 
 Program createDFG(loc project) = createDFG(createAstsFromEclipseProject(project, true));
 
@@ -81,7 +82,7 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		} 
 		//set up environment with parameters and fields
 		map[loc, set[loc]] env = ( p@decl : {p@src} | p <- parameters) + ( field : {emptyId} | field <- fieldsPerClass[extractClassName(m@decl)]);
-		<methodStmts, _, _> = dealWithStmts(m, b, env); 
+		<methodStmts, _, _> = dealWithStmts(m, b, environment(env, (),(),())); 
 		
 		//lock statements if synchronized
 		if(lock != unlocked){
@@ -93,32 +94,31 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 	return result;
 }
 
-tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[loc,set[loc]]] dealWithStmts(Declaration m , Statement b, map[loc,set[loc]] env){
+tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement b, Environment env){
 	set[Stmt] currentBlock = {};
 	set[Stmt] potentialStmt = {};
-	map[loc,set[loc]] potentialContinueEnv = ();
-	map[loc,set[loc]] potentialBreakEnv = ();
+
 	top-down-break visit(b) {
 		case s:Expression::simpleName(name):{
-			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- env[s@decl]};	
+			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- getVariableDependencies(env,s@decl)};	
 		}
 		case s:Expression::this():{
 			potentialStmt += {Stmt::read(s@src, |java+field:///|+ extractClassName(m@decl)+"/this", emptyId)};	
 		}
 		case s:Expression::fieldAccess(_,exp,_):{
-			<unnestedStmts, env, nestedRead,_,_> = dealWithStmts(m, \expressionStatement(exp), env);
-			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- env[s@decl]} + {Stmt::read(s@src, s@decl, dependOn) | read(dependOn,_,_) <- nestedRead};	
+			<unnestedStmts, nestedRead, env> = dealWithStmts(m, \expressionStatement(exp), env);
+			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- getVariableDependencies(env,s@decl)} + {Stmt::read(s@src, s@decl, dependOn) | read(dependOn,_,_) <- nestedRead};	
 		}
 		case s:Expression::fieldAccess(_,_):{
-			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- env[s@decl]};	
+			potentialStmt += {Stmt::read(s@src, s@decl, writtenBy) | writtenBy <- getVariableDependencies(env,s@decl)};	
 		}
 		case s:Expression::assignment(lhs,_,rhs): {
-			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(rhs), env);
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(rhs), env);
 			currentBlock += nestedReads;
 			currentBlock += unnestedStmts;
 			if(Expression::arrayAccess(ar, index) := lhs){
 				//read the assignments of the right handside
-				<unnestedStmtsIndex,env, nestedReadsIndex, _, _> = dealWithStmts(m, \expressionStatement(index), env);
+				<unnestedStmtsIndex, nestedReadsIndex, env> = dealWithStmts(m, \expressionStatement(index), env);
 				
 				nestedReads += nestedReadsIndex;
 				currentBlock += unnestedStmtsIndex;
@@ -129,8 +129,8 @@ tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[loc,set[lo
 					currentBlock += {Stmt::assign(s@src, ar@decl, id) | Stmt::read(id, _, _) <- nestedReads}; //have to find the right read
 					currentBlock += {Stmt::assign(s@src, ar@decl, id) | Stmt::call(id, _, _) <- nestedReads};	
 				}
-				env[ar@decl] = {s@src};
-				potentialStmt += {Stmt::read(lhs@src, ar@decl, writtenBy) | writtenBy <- env[ar@decl]};
+				env = setVariableDependencies(env, ar@decl, {s@src});
+				potentialStmt += {Stmt::read(lhs@src, ar@decl, writtenBy) | writtenBy <- getVariableDependencies(env,ar@decl)};
 			}
 			else if(simpleExpression(lhs)) {
 				//read the assignments of the right handside
@@ -141,13 +141,13 @@ tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[loc,set[lo
 					currentBlock += {Stmt::assign(s@src, lhs@decl, id) | Stmt::read(id, _, _) <- nestedReads}; //have to find the right read
 					currentBlock += {Stmt::assign(s@src, lhs@decl, id) | Stmt::call(id, _, _, _) <- nestedReads};
 				}
-				env[lhs@decl] = {s@src};
-				potentialStmt += {Stmt::read(lhs@src, lhs@decl, writtenBy) | writtenBy <- env[lhs@decl]};
+				env = setVariableDependencies(env, lhs@decl, {s@src});
+				potentialStmt += {Stmt::read(lhs@src, lhs@decl, writtenBy) | writtenBy <- getVariableDependencies(env,lhs@decl)};
 			}
 		}
 		case s:Expression::infix(lhs, operator, rhs):{
 			if(operator == "&&" || operator == "||"){
-				<unnestedStmts, env, nestedReads, _, _> = branching(m, lhs, rhs, env);
+				<unnestedStmts, nestedReads, env> = branching(m, lhs, rhs, env);
 				currentBlock += unnestedStmts;
 				potentialStmt += nestedReads;
 			}
@@ -157,34 +157,34 @@ tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[loc,set[lo
 		}
 		case s:Expression::postfix(operand, operator):{
 			if(operator == "++" || operator == "--"){
-				<unnestedStmts, env, nestedReads, _, _> = dealWithStmts(m,\expressionStatement(operand), env);
+				<unnestedStmts, nestedReads, env> = dealWithStmts(m,\expressionStatement(operand), env);
 				currentBlock += unnestedStmts;
 				potentialStmt += nestedReads;
 				currentBlock += {Stmt::assign(s@src, operand@decl, id) | read(id,_,_) <- nestedReads};
-				env[operand@decl] = {s@src};
-				potentialStmt += {Stmt::read(operand@src, operand@decl, writtenBy) | writtenBy <- env[operand@decl]};				
+				env = setVariableDependencies(env, operand@decl, {s@src});
+				potentialStmt += {Stmt::read(operand@src, operand@decl, writtenBy) | writtenBy <- getVariableDependencies(env, operand@decl)};				
 			}
 			else{
 				fail;
 			}
 		}
 		case s:Expression::conditional(cond,ifExpr,elseExpr):{
-			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), env);
 			currentBlock += unnestedStmts;
 			potentialStmt += nestedReads;
 		
-			<unnestedStmts,env, nestedReads, _, _> = branching(m, ifStmts, elseStmts, env);
+			<unnestedStmts,nestedReads, env> = branching(m, ifStmts, elseStmts, env);
 			currentBlock += unnestedStmts;
 			potentialStmt += nestedReads;
 		}
 		case s:Expression::methodCall(isSuper,name,args):{
-			<unnestedStmts,env, nestedReads> = dealWithStmts(m, \methodCall(isSuper, \this(), name, args), env);
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \methodCall(isSuper, \this(), name, args), env);
 			currentBlock += unnestedStmts;
 			potentialStmt += nestedReads;
 		}
 		case s:Expression::methodCall(isSuper, receiver, name, args):{
 			for(arg <- args){
-				<unnestedStmts,env, nestedReads> = dealWithStmts(m, expressionStatement(arg), env);
+				<unnestedStmts, nestedReads, env> = dealWithStmts(m, expressionStatement(arg), env);
 				currentBlock += nestedReads;
 				currentBlock += unnestedStmts;
 			}
@@ -192,7 +192,7 @@ tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[loc,set[lo
 			currentBlock+={Stmt::call(s@src, receiver@decl, s@decl, parameter) | call(parameter, _, _, _) <- nestedReads};	
 		}
 		case s:Statement::variable(name,_,rhs): {
-			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(rhs), env);
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(rhs), env);
 			currentBlock += unnestedStmts + nestedReads;
 			if(nestedReads == {})
 				currentBlock += {Stmt::assign(s@src, s@decl, emptyId)};
@@ -200,142 +200,147 @@ tuple[set[Stmt], map[loc,set[loc]], set[Stmt], map[loc,set[loc]], map[loc,set[lo
 				currentBlock += {Stmt::assign(s@src, s@decl, id) | Stmt::read(id, _, _) <- nestedReads}; //have to find the right read
 				currentBlock += {Stmt::assign(s@src, s@decl, id) | Stmt::call(id, _, _) <- nestedReads};	
 			}
-			env[s@decl] = {s@src};
+			env = setVariableDependencies(env, s@decl, {s@src});
+			println(env);
 			potentialStmt = {};
 		}
 		case s:Statement::synchronizedStatement(expr, stmts):{
-			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(expr), env);
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(expr), env);
 			currentBlock += unnestedStmts + nestedReads;
 			vlock = getDeclFromRead(getOneFrom(nestedReads));	
 						
-			<unnestedStmts,env, nestedReads, continueEnv, breakEnv> = dealWithStmts(m, stmts, env);
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, stmts, env);
 			currentBlock += unnestedStmts;
-			potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
-			potentialBreakEnv = mergeInBlockEnvironments(breakEnv,potentialBreakEnv);
+			//potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
+			//potentialBreakEnv = mergeInBlockEnvironments(breakEnv,potentialBreakEnv);
 			
 			currentBlock += {Stmt::lock(s@src, vlock, {getIdFromStmt(id) | id <- unnestedStmts})};
 			
 		}	
 		case s:Statement::\if(cond,ifStmts):{
-			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), env);
 			currentBlock += unnestedStmts + nestedReads;
 			
-			<unnestedStmts,envR, n, continueEnv, breakEnv> = dealWithStmts(m, ifStmts, env);
+			<unnestedStmts, n, envR> = dealWithStmts(m, ifStmts, env);
 			currentBlock += unnestedStmts;
-			potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
-			potentialBreakEnv = mergeInBlockEnvironments(breakEnv,potentialBreakEnv);
+			//potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
+			//potentialBreakEnv = mergeInBlockEnvironments(breakEnv,potentialBreakEnv);
 			
 			env = mergeEnvironments(env, envR);
 		}
 		case s:Statement::\if(cond,ifStmts,elseStmts):{
-			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), env);
 			currentBlock += unnestedStmts + nestedReads;
 		
-			<unnestedStmts,env, nestedReads, continueEnv, breakEnv> = branching(m, ifStmts, elseStmts, env);
+			<unnestedStmts, nestedReads, env> = branching(m, ifStmts, elseStmts, env);
 			currentBlock += unnestedStmts;
-			potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
-			potentialBreakEnv = mergeInBlockEnvironments(breakEnv,potentialBreakEnv);
+			//potentialContinueEnv = mergeInBlockEnvironments(continueEnv,potentialContinueEnv);
+			//potentialBreakEnv = mergeInBlockEnvironments(breakEnv,potentialBreakEnv);
 			
 		}
 		case s:Statement::\while(cond,stmts):{
 			
 			//executed at least once and added to the env, no branching
-			<unnestedStmts,env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), env);
 			currentBlock += unnestedStmts + nestedReads;
 
 			//executed once all the reads and assigns added missing connections to itself
-			<unnestedStmts, loopedEnv, nestedReads, continueEnv, breakEnv> = dealWithStmts(m, stmts, env);
+			<unnestedStmts, nestedReads, loopedEnv> = dealWithStmts(m, stmts, env);
 			currentBlock += unnestedStmts;
 			
 			//include continue
-			loopedEnv = mergeInBlockEnvironments(loopedEnv, continueEnv);
+			loopedEnv = mergeContinue(loopedEnv);
 			
 			//running the condition after one loop getting all the connections from statements and continue command
-			<unnestedStmts, exitEnv, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), loopedEnv);
+			<unnestedStmts, nestedReads, exitEnv> = dealWithStmts(m, \expressionStatement(cond), loopedEnv);
 			currentBlock += unnestedStmts + nestedReads;
 
-			<unnestedStmts, loopedEnv, n, _, _> = dealWithStmts(m, stmts, exitEnv);
+			<unnestedStmts, n, loopedEnv> = dealWithStmts(m, stmts, exitEnv);
 			currentBlock += unnestedStmts;
 			
-			exitEnv = mergeInBlockEnvironments(exitEnv,breakEnv);
+			exitEnv = mergeBreak(exitEnv);
 			
 			env = mergeEnvironments(env,exitEnv);
+			env = resetContinueEnvironment(env);
+			env = resetBreakEnvironment(env);
 		}
 		case s:Statement::\do(stmts,cond):{
 
 			//executed once all the reads and assigns added missing connections to itself
-			<unnestedStmts, env, nestedReads, continueEnv, breakEnv> = dealWithStmts(m, stmts, env);
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, stmts, env);
 			currentBlock += unnestedStmts;
 			
 			//include continue
-			loopedEnv = mergeInBlockEnvironments(env, continueEnv);
+			loopedEnv = mergeContinue(env);
 			
 			//running the condition after one loop getting all the connections from statements and continue command
-			<unnestedStmts, exitEnv, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
+			<unnestedStmts, nestedReads, exitEnv> = dealWithStmts(m, \expressionStatement(cond), env);
 			currentBlock += unnestedStmts + nestedReads;
 
-			<unnestedStmts, loopedEnv, n, _, _> = dealWithStmts(m, stmts, exitEnv);
+			<unnestedStmts, n, loopedEnv> = dealWithStmts(m, stmts, exitEnv);
 			currentBlock += unnestedStmts;
 			
-			exitEnv = mergeInBlockEnvironments(exitEnv,breakEnv);
+			exitEnv = mergeBreak(exitEnv);
 			
 			env = mergeEnvironments(env,exitEnv);
+			env = resetContinueEnvironment(env);
+			env = resetBreakEnvironment(env);
 		}
 		case s:Statement::\for(initializers, cond, updaters, stmts):{
 
-			<unnestedStmts, env, nestedReads, _, _> = dealWithStmts(m, \block([\expressionStatement(i) | i <- initializers]), env);
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \block([\expressionStatement(i) | i <- initializers]), env);
 			currentBlock += unnestedStmts;
 			
 			//running the condition after one loop getting all the connections from statements and continue command
-			<unnestedStmts, env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), env);
 			currentBlock += unnestedStmts + nestedReads;
 
 			//executed once all the reads and assigns added missing connections to itself
-			<unnestedStmts, loopedEnv, nestedReads, continueEnv, breakEnv> = dealWithStmts(m, stmts, env);
+			<unnestedStmts, nestedReads, loopedEnv> = dealWithStmts(m, stmts, env);
 			currentBlock += unnestedStmts;
 			
 			//include continue
-			loopedEnv = mergeInBlockEnvironments(loopedEnv, continueEnv);
+			loopedEnv = mergeContinue(loopedEnv);
 			
 			//running the condition after one loop getting all the connections from statements and continue command
-			<unnestedStmts, loopedEnv, nestedReads, _, _> = dealWithStmts(m, \block([\expressionStatement(u) | u <- updaters]), loopedEnv);
+			<unnestedStmts, nestedReads, loopedEnv> = dealWithStmts(m, \block([\expressionStatement(u) | u <- updaters]), loopedEnv);
 			currentBlock += unnestedStmts;
 
 			//running the condition after one loop getting all the connections from statements and continue command
-			<unnestedStmts, exitEnv, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), loopedEnv);
+			<unnestedStmts, nestedReads, exitEnv> = dealWithStmts(m, \expressionStatement(cond), loopedEnv);
 			currentBlock += unnestedStmts + nestedReads;
 
-			<unnestedStmts, loopedEnv, n, _, _> = dealWithStmts(m, stmts, exitEnv);
+			<unnestedStmts, n, loopedEnv> = dealWithStmts(m, stmts, exitEnv);
 			currentBlock += unnestedStmts;
 			
-			exitEnv = mergeInBlockEnvironments(exitEnv,breakEnv);
+			exitEnv = mergeBreak(exitEnv);
 			
 			env = mergeEnvironments(env,exitEnv);
+			env = resetContinueEnvironment(env);
+			env = resetBreakEnvironment(env);			
 		}
 		case s:Statement::\continue():{
-			potentialContinueEnv = mergeInBlockEnvironments(env,potentialContinueEnv);
-			return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
+			return <currentBlock, potentialStmt, addToContinueEnvironment(env)>;
 			
 		}
 		case s:Statement::\break(""):{
-			potentialBreakEnv = mergeInBlockEnvironments(env,potentialBreakEnv);
-			return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
+			return <currentBlock, potentialStmt, addToBreakEnvironment(env)>;
 			
 		}
 		case s:Statement::\break():{
-			potentialBreakEnv = mergeInBlockEnvironments(env,potentialBreakEnv);
-			return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
+			//to get the environment of different break statements
+			return <currentBlock, potentialStmt, addToBreakEnvironment(env)>;		
 		}
 		//case s:Statement::\return():{
-		//	return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
+		//	return <currentBlock, potentialStmt, addToReturnEnvironment(env)>;
 		//}
 		//case s:Statement::\return(exp):{
 		//	<unnestedStmts, env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
 		//	currentBlock += unnestedStmts + nestedReads;
-		//	return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
+		//	return <currentBlock, potentialStmt, addToReturnEnvironment(env)>;
 		//}
 	}
-	return <currentBlock, env, potentialStmt, potentialContinueEnv, potentialBreakEnv>;
+	return <currentBlock, potentialStmt, env>;
 }
 
 bool simpleExpression(fieldAccess(_,_,_)) = true;
