@@ -82,7 +82,7 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		} 
 		//set up environment with parameters and fields
 		map[loc, set[loc]] env = ( p@decl : {p@src} | p <- parameters) + ( field : {emptyId} | field <- fieldsPerClass[extractClassName(m@decl)]);
-		<methodStmts, _, _> = dealWithStmts(m, b, environment(env, (),(),())); 
+		<methodStmts, _, _> = dealWithStmts(m, b, environment(env, (),(),(),())); 
 		
 		//lock statements if synchronized
 		if(lock != unlocked){
@@ -240,7 +240,7 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			
 			//executed at least once and added to the env, no branching
 			previousHelpingEnvironment = env;
-			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), environment(getCurrentEnvironment(env),(),(),getreturnEnvironment(env)));
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), environment(getCurrentEnvironment(env),(),(),(),getreturnEnvironment(env)));
 			currentBlock += unnestedStmts + nestedReads;
 
 			//executed once all the reads and assigns added missing connections to itself
