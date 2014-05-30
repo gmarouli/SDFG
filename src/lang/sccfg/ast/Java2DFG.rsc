@@ -257,6 +257,9 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 							exitEnv = mergeEnvironmentsInBlock(exitEnv, mergeBreak(currentEnv));
 							currentEnv = insertingEnv;
 						}
+						else{
+							currentEnv = mergeEnvironmentsInBlock(insertingEnv, currentEnv);
+						}
 					}
 					case  \defaultCase():{
 						<unnestedStmts, nestedReads, currentEnv> = dealWithStmts(m, \block(currentCase), currentEnv);
@@ -287,30 +290,32 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			env = resetHelpingEnvironment(env,previousHelpingEnvironment);
 		}
 		case s:Statement::\while(cond,stmts):{
+			<currentBlock, nestedReads, env> = dealWithLoopsConditionFirst(m, [], cond, [], stmts, env);
 			
-			//executed at least once and added to the env, no branching
-			previousHelpingEnvironment = env;
-			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), environment(getCurrentEnvironment(env),(),(),(),getReturnEnvironment(env)));
-			currentBlock += unnestedStmts + nestedReads;
-
-			//executed once all the reads and assigns added missing connections to itself
-			<unnestedStmts, nestedReads, loopedEnv> = dealWithStmts(m, stmts, env);
-			currentBlock += unnestedStmts;
 			
-			//include continue
-			loopedEnv = mergeContinue(loopedEnv);
-			
-			//running the condition after one loop getting all the connections from statements and continue command
-			<unnestedStmts, nestedReads, exitEnv> = dealWithStmts(m, \expressionStatement(cond), loopedEnv);
-			currentBlock += unnestedStmts + nestedReads;
-
-			<unnestedStmts, n, loopedEnv> = dealWithStmts(m, stmts, exitEnv);
-			currentBlock += unnestedStmts;
-			
-			exitEnv = mergeBreak(exitEnv);
-			
-			env = mergeEnvironments(env,exitEnv);
-			env = resetHelpingEnvironment(env,previousHelpingEnvironment);
+	//		//executed at least once and added to the env, no branching
+	//		previousHelpingEnvironment = env;
+	//		<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), environment(getCurrentEnvironment(env),(),(),getReturnEnvironment(env)));
+	//		currentBlock += unnestedStmts + nestedReads;
+//
+	//		//executed once all the reads and assigns added missing connections to itself
+	//		<unnestedStmts, nestedReads, loopedEnv> = dealWithStmts(m, stmts, env);
+	//		currentBlock += unnestedStmts;
+	//		
+	//		//include continue
+	//		loopedEnv = mergeContinue(loopedEnv);
+	//		
+	//		//running the condition after one loop getting all the connections from statements and continue command
+	//		<unnestedStmts, nestedReads, exitEnv> = dealWithStmts(m, \expressionStatement(cond), loopedEnv);
+	//		currentBlock += unnestedStmts + nestedReads;
+//
+	//		<unnestedStmts, n, loopedEnv> = dealWithStmts(m, stmts, exitEnv);
+	//		currentBlock += unnestedStmts;
+	//		
+	//		exitEnv = mergeBreak(exitEnv);
+	//		
+	//		env = mergeEnvironments(env,exitEnv);
+	//		env = resetHelpingEnvironment(env,previousHelpingEnvironment);
 		}
 		case s:Statement::\do(stmts,cond):{
 		
@@ -335,43 +340,17 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			env = resetHelpingEnvironment(env,previousHelpingEnvironment);
 		}
 		case s:Statement::\for(initializers, cond, updaters, stmts):{
+		
+			<currentBlock, nestedReads, env> = dealWithLoopsConditionFirst(m, initializers, cond, updaters, stmts, env);
 
-			previousHelpingEnvironment = env;
-			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \block([\expressionStatement(i) | i <- initializers]), envinronment(getCurrentEnvironment(env),(),(),getReturnEnvironment(env)));
-			currentBlock += unnestedStmts;
-			
-			//running the condition after one loop getting all the connections from statements and continue command
-			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), env);
-			currentBlock += unnestedStmts + nestedReads;
-
-			//executed once all the reads and assigns added missing connections to itself
-			<unnestedStmts, nestedReads, loopedEnv> = dealWithStmts(m, stmts, env);
-			currentBlock += unnestedStmts;
-			
-			//include continue
-			loopedEnv = mergeContinue(loopedEnv);
-			
-			//running the condition after one loop getting all the connections from statements and continue command
-			<unnestedStmts, nestedReads, loopedEnv> = dealWithStmts(m, \block([\expressionStatement(u) | u <- updaters]), loopedEnv);
-			currentBlock += unnestedStmts;
-
-			//running the condition after one loop getting all the connections from statements and continue command
-			<unnestedStmts, nestedReads, exitEnv> = dealWithStmts(m, \expressionStatement(cond), loopedEnv);
-			currentBlock += unnestedStmts + nestedReads;
-
-			<unnestedStmts, n, loopedEnv> = dealWithStmts(m, stmts, exitEnv);
-			currentBlock += unnestedStmts;
-			
-			exitEnv = mergeBreak(exitEnv);
-			
-			env = mergeEnvironments(env,exitEnv);
-			env = resetHelpingEnvironment(env,previousHelpingEnvironment);			
+						
 		}
 		case s:Statement::\continue():{
 			return <currentBlock, potentialStmt, addToContinueEnvironment(env)>;
 			
 		}
 		case s:Statement::\break(""):{
+			// ISSUE: what if break is not in a branch? then it is perceived partly as a continue
 			return <currentBlock, potentialStmt, addToBreakEnvironment(env)>;
 			
 		}
