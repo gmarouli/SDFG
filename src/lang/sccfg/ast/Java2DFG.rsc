@@ -55,12 +55,12 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 	inheritingClasses = (c@decl.path : {sc@decl.path | simpleType(sc) <- extends}| /c:class(name, extends, _, b) <- asts);
 	
 	allMethods 
-		= { m | /m:Declaration::method(_,_,_,_,_) <- asts}
-		+ {Declaration::method(t, n, p, e, empty())[@decl=m@decl] | /m:Declaration::method(Type t,n,p,e) <- asts}
-		+ {Declaration::method(simpleType(simpleName(n)), n, p, e, Statement::block((initialized[extractClassName(m@decl)] ? []) + b))[@decl=m@decl] | /m:Declaration::constructor(str n,p,e,  Statement::block(b)) <- asts}
-		+ {Declaration::method(simpleType(simpleName(n)), n, [], [], block(initialized[c@decl.path] ? []))[@decl=(c@decl)[scheme="java+constructor"] + "<n>()"] | /c:class(n, _, _, b) <- asts, !(Declaration::constructor(_, _, _, _) <- b)}
+		= [ m | /m:Declaration::method(_,_,_,_,_) <- asts]
+		+ [Declaration::method(t, n, p, e, empty())[@decl=m@decl] | /m:Declaration::method(Type t,n,p,e) <- asts]
+		+ [Declaration::method(simpleType(simpleName(n)), n, p, e, Statement::block((initialized[extractClassName(m@decl)] ? []) + b))[@decl=m@decl] | /m:Declaration::constructor(str n,p,e,  Statement::block(b)) <- asts]
+		+ [Declaration::method(simpleType(simpleName(n)), n, [], [], block(initialized[c@decl.path] ? []))[@decl=(c@decl)[scheme="java+constructor"] + "<n>()"] | /c:class(n, _, _, b) <- asts, !(Declaration::constructor(_, _, _, _) <- b)]
 	;
-	
+
 	allMethods = fixCollections(allMethods);
 	
 	allMethods = visit(allMethods) {
@@ -158,12 +158,19 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 		}
 		case s:Expression::postfix(operand, operator):{
 			if(operator == "++" || operator == "--"){
-				<unnestedStmts, nestedReads, env> = dealWithStmts(m,\expressionStatement(operand), env);
+				<unnestedStmts, nestedReads, env> = specialOperator(m, env, operor, operand, s@src);
 				currentBlock += unnestedStmts;
 				potentialStmt += nestedReads;
-				currentBlock += {Stmt::assign(s@src, operand@decl, id) | read(id,_,_) <- nestedReads};
-				env = setVariableDependencies(env, operand@decl, {s@src});
-				potentialStmt += {Stmt::read(operand@src, operand@decl, writtenBy) | writtenBy <- getVariableDependencies(env, operand@decl)};				
+			}
+			else{
+				fail;
+			}
+		}
+		case s:Expression::prefix(operator, operand):{
+			if(operator == "++" || operator == "--"){
+				<unnestedStmts, nestedReads, env> = specialOperator(m, env, operator, operand, s@src);
+				currentBlock += unnestedStmts;
+				potentialStmt += nestedReads;
 			}
 			else{
 				fail;
@@ -292,7 +299,8 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			env = resetHelpingEnvironment(env,previousHelpingEnvironment);
 		}
 		case s:Statement::\while(cond,stmts):{
-			<currentBlock, nestedReads, env> = dealWithLoopsConditionFirst(m, [], cond, [], stmts, env);
+			<unnestedStmts, nestedReads, env> = dealWithLoopsConditionFirst(m, [], cond, [], stmts, env);
+			currentBlock += unnestedStmts;
 		}
 		case s:Statement::\do(stmts,cond):{
 		
@@ -318,9 +326,8 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 		}
 		case s:Statement::\for(initializers, cond, updaters, stmts):{
 		
-			<currentBlock, nestedReads, env> = dealWithLoopsConditionFirst(m, initializers, cond, updaters, stmts, env);
-
-						
+			<unnestedStmts, nestedReads, env> = dealWithLoopsConditionFirst(m, initializers, cond, updaters, stmts, env);
+			currentBlock += unnestedStmts;
 		}
 		case s:Statement::\continue():{
 			return <currentBlock, potentialStmt, addToContinueEnvironment(env)>;

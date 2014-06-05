@@ -6,7 +6,7 @@ import IO;
 import lang::java::jdt::m3::AST;
 import lang::java::m3::TypeSymbol;
 
-public set[Declaration] fixCollections(set[Declaration] ast) {
+public list[Declaration] fixCollections(list[Declaration] ast) {
 	return visit (ast) {
 		case oe:methodCall(_, Expression receiver, methodName,	args):  {
 			if (isContainerInsert(receiver, methodName)) {

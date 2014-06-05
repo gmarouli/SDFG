@@ -58,3 +58,13 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithLoopsConditionFirst(Declaration
 	
 	return <currentBlock, potentialStmt, env>;
 }
+
+tuple[set[Stmt], set[Stmt], Environment] specialOperator(m, env, operor, operand, src){
+	<unnestedStmts, nestedReads, env> = dealWithStmts(m,\expressionStatement(operand), env);
+	currentBlock = unnestedStmts;
+	potentialStmt = nestedReads;
+	currentBlock += {Stmt::assign(src, operand@decl, id) | read(id,_,_) <- nestedReads};
+	env = setVariableDependencies(env, operand@decl, {src});
+	potentialStmt += {Stmt::read(operand@src, operand@decl, writtenBy) | writtenBy <- getVariableDependencies(env, operand@decl)};				
+	return <currentBlock, potentialStmt, env>;
+}

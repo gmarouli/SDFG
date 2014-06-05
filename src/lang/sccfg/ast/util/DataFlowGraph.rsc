@@ -8,7 +8,7 @@ import List;
 import Relation;
 
 public data GraphNode = access(loc address, loc variable)
-						| lock(loc address);
+						| lock(loc address, loc variable);
 alias DFG = rel[GraphNode from, GraphNode to];
 
 DFG buildGraph(Program p){
@@ -27,16 +27,16 @@ DFG buildDataDependencies(Program p)
 	
 DFG buildSynchronizedDependencies(Program p)
 	 //acquire dependency from synchronized
-	 = { <access(getIdFromStmt(stmt), getVarFromStmt(stmt)), GraphNode::lock(l)> | Stmt::lock(l, _, stmts) <- p.statements, stmt <- stmts}
+	 = { <access(getIdFromStmt(stmt), getVarFromStmt(stmt)), GraphNode::lock(address, l)> | Stmt::lock(address, l, stmts) <- p.statements, stmt <- stmts}
 	 //release dependency from synchronized
-	 + { <GraphNode::lock(l), access(getIdFromStmt(stmt), getVarFromStmt(stmt))> | Stmt::lock(l, _, stmts) <- p.statements, stmt <- stmts}
+	 + { <GraphNode::lock(address, l), access(getIdFromStmt(stmt), getVarFromStmt(stmt))> | Stmt::lock(address, l, stmts) <- p.statements, stmt <- stmts}
 	;
 	
 DFG buildVolatileDependencies(Program p, DFG g)
 	//acquire dependency from volatile
-	 = { <stmt, GraphNode::lock(l)> | attribute(volVar, true) <- p.decls, <stmt,access(l, varRead)> <- g, read(id, variable,_) <- p.statements, id == l, volVar == varRead}
+	 = { <stmt, GraphNode::lock(address, volVar)> | attribute(volVar, true) <- p.decls, <stmt,access(address, varRead)> <- g, read(id, variable,_) <- p.statements, id == address, volVar == varRead}
 	 //release dependency from volatile
-	 + { <GraphNode::lock(l), stmt> | attribute(volVar, true) <- p.decls, <access(l, varAssign), stmt> <- g, assign(id, variable,_) <- p.statements, id == l, volVar == varAssign}
+	 + { <GraphNode::lock(address, volVar), stmt> | attribute(volVar, true) <- p.decls, <access(address, varAssign), stmt> <- g, assign(id, variable,_) <- p.statements, id == address, volVar == varAssign}
 	 
 	;
 	
