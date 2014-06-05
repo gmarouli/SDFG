@@ -86,7 +86,7 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		
 		//lock statements if synchronized
 		if(lock != unlocked){
-			methodStmts += {Stmt::lock(src, lock, {getIdFromStmt(s) | s <- methodStmts})};
+			methodStmts += {Stmt::lock(m@src, lock, {s | s <- methodStmts})};
 		}
 		result+= methodStmts;
 	}	
@@ -211,7 +211,7 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			<unnestedStmts, nestedReads, env> = dealWithStmts(m, stmts, env);
 			currentBlock += unnestedStmts;
 			
-			currentBlock += {Stmt::lock(s@src, vlock, {getIdFromStmt(id) | id <- unnestedStmts})};
+			currentBlock += {Stmt::lock(s@src, vlock, {lockedStmt | lockedStmt <- unnestedStmts})};
 			
 		}	
 		case s:Statement::\if(cond,ifStmts):{
@@ -291,31 +291,6 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 		}
 		case s:Statement::\while(cond,stmts):{
 			<currentBlock, nestedReads, env> = dealWithLoopsConditionFirst(m, [], cond, [], stmts, env);
-			
-			
-	//		//executed at least once and added to the env, no branching
-	//		previousHelpingEnvironment = env;
-	//		<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), environment(getCurrentEnvironment(env),(),(),getReturnEnvironment(env)));
-	//		currentBlock += unnestedStmts + nestedReads;
-//
-	//		//executed once all the reads and assigns added missing connections to itself
-	//		<unnestedStmts, nestedReads, loopedEnv> = dealWithStmts(m, stmts, env);
-	//		currentBlock += unnestedStmts;
-	//		
-	//		//include continue
-	//		loopedEnv = mergeContinue(loopedEnv);
-	//		
-	//		//running the condition after one loop getting all the connections from statements and continue command
-	//		<unnestedStmts, nestedReads, exitEnv> = dealWithStmts(m, \expressionStatement(cond), loopedEnv);
-	//		currentBlock += unnestedStmts + nestedReads;
-//
-	//		<unnestedStmts, n, loopedEnv> = dealWithStmts(m, stmts, exitEnv);
-	//		currentBlock += unnestedStmts;
-	//		
-	//		exitEnv = mergeBreak(exitEnv);
-	//		
-	//		env = mergeEnvironments(env,exitEnv);
-	//		env = resetHelpingEnvironment(env,previousHelpingEnvironment);
 		}
 		case s:Statement::\do(stmts,cond):{
 		
@@ -388,10 +363,16 @@ default Expression removeNesting(Expression e) = e;
 private str extractClassName(loc method) 
 	= substring(method.path,0,findLast(method.path,"/"));
 	
-private loc getIdFromStmt(Stmt::read(id, _, _)) = id;
-private loc getIdFromStmt(Stmt::newAssign(id, _, _, _)) = id;
-private loc getIdFromStmt(Stmt::assign(id, _, _)) = id;
-private loc getIdFromStmt(Stmt::call(id, _, _, _)) = id;
-private loc getIdFromStmt(Stmt::lock(id, _, _)) = id;
+loc getIdFromStmt(Stmt::read(id, _, _)) = id;
+loc getIdFromStmt(Stmt::newAssign(id, _, _, _)) = id;
+loc getIdFromStmt(Stmt::assign(id, _, _)) = id;
+loc getIdFromStmt(Stmt::call(id, _, _, _)) = id;
+loc getIdFromStmt(Stmt::lock(id, _, _)) = id;
+
+loc getVarFromStmt(Stmt::read(_, var, _)) = var;
+loc getVarFromStmt(Stmt::newAssign(_, var, _, _)) = var;
+loc getVarFromStmt(Stmt::assign(_, var, _)) = var;
+loc getVarFromStmt(Stmt::call(_, var, _, _)) = var;
+loc getVarFromStmt(Stmt::lock(_, var, _)) = var;
 
 private loc getDeclFromRead(Stmt::read(_,decl,_)) = decl;

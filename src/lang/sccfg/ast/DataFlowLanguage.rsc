@@ -16,5 +16,5 @@ data Stmt
 	| newAssign(loc id, loc target, loc constructor, list[loc] actualParameters)
 	| assign(loc id, loc target, loc dependsOn)
 	| call(loc id, loc receiver, loc method, loc parameter)//, list[loc] actualParameters)
-	| lock(loc id, loc lock, set[loc] stmts)
+	| lock(loc id, loc lock, set[Stmt] stmts)
 	;
