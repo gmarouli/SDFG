@@ -60,7 +60,7 @@ map[loc,set[loc]] mergeInBlockEnvironments(map[loc,set[loc]] env1, map[loc,set[l
 }
 
 set[loc] getVariableDependencies(environment(env, _, _, _), variable){
-	return env[variable];
+	return env[variable] ? {};
 }
 
 Environment setVariableDependencies(e:environment(env, contEnv, brEnv, retEnv), loc variable, set[loc] assignments){

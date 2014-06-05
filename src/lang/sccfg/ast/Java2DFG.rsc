@@ -51,8 +51,9 @@ private map[str, list[Statement]] gatherInitializations(set[Declaration] asts)
 set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 
 	initialized = gatherInitializations(asts);
-	fieldsPerClass = ( c@decl.path : {v@decl | field(t,frags) <- b, v <- frags}| /c:class(name, _, _, b) <- asts);
-
+	fieldsPerClass = (c@decl.path : {v@decl | field(t,frags) <- b, v <- frags}| /c:class(name, _, _, b) <- asts);
+	inheritingClasses = (c@decl.path : {sc@decl.path | simpleType(sc) <- extends}| /c:class(name, extends, _, b) <- asts);
+	
 	allMethods 
 		= { m | /m:Declaration::method(_,_,_,_,_) <- asts}
 		+ {Declaration::method(t, n, p, e, empty())[@decl=m@decl] | /m:Declaration::method(Type t,n,p,e) <- asts}
@@ -81,7 +82,7 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 				lock = l;
 		} 
 		//set up environment with parameters and fields
-		map[loc, set[loc]] env = ( p@decl : {p@src} | p <- parameters) + ( field : {emptyId} | field <- fieldsPerClass[extractClassName(m@decl)]);
+		map[loc, set[loc]] env = ( p@decl : {p@src} | p <- parameters) + ( field : {emptyId} | field <- fieldsPerClass[extractClassName(m@decl)] ? {}) + ( field : {emptyId} | sc <- inheritingClasses[extractClassName(m@decl)] ? {}, field <- fieldsPerClass[sc] ? {});
 		<methodStmts, _, _> = dealWithStmts(m, b, environment(env, (),(),())); 
 		
 		//lock statements if synchronized
@@ -183,6 +184,7 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			potentialStmt += nestedReads;
 		}
 		case s:Expression::methodCall(isSuper, receiver, name, args):{
+			nestedReads = {};
 			for(arg <- args){
 				<unnestedStmts, nestedReads, env> = dealWithStmts(m, expressionStatement(arg), env);
 				currentBlock += nestedReads;

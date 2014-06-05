@@ -2,7 +2,9 @@ module lang::sccfg::ast::util::ContainersManagement
 
 import Set;
 import List;
+import IO;
 import lang::java::jdt::m3::AST;
+import lang::java::m3::TypeSymbol;
 
 public set[Declaration] fixCollections(set[Declaration] ast) {
 	return visit (ast) {
