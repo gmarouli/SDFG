@@ -13,6 +13,8 @@ import lang::sccfg::ast::util::ControlFlowHelpers;
 
 Program createDFG(loc project) = createDFG(createAstsFromEclipseProject(project, true));
 
+map[loc, set[loc]] exceptions = ();
+
 Program createDFG(set[Declaration] asts) {
 	println("Getting decls");
 	decls = getDeclarations(asts);
@@ -74,7 +76,10 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 	};
 	
 	set[Stmt] result = {};
-	for (m:Declaration::method(_, _, parameters, _, b) <- allMethods) {
+	for (m:Declaration::method(_, _, parameters, ex, b) <- allMethods) {
+		if(ex != []){
+			exceptions[m@decl] = {e@decl | e <- ex};
+		}
 		//determine lock
 		loc lock = unlocked;
 		for(Decl::method(id, _, l) <- decls){
@@ -91,7 +96,6 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		}
 		result+= methodStmts;
 	}	
-	
 	return result;
 }
 
