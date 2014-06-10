@@ -76,10 +76,13 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 	};
 	
 	set[Stmt] result = {};
-	for (m:Declaration::method(_, _, parameters, ex, b) <- allMethods) {
+	for (m:Declaration::method(_, _, _, ex, _) <- allMethods) {
 		if(ex != []){
 			exceptions[m@decl] = {e@decl | e <- ex};
 		}
+	}
+	
+	for (m:Declaration::method(_, _, parameters, ex, b) <- allMethods) {
 		//determine lock
 		loc lock = unlocked;
 		for(Decl::method(id, _, l) <- decls){
@@ -203,6 +206,7 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			}
 			currentBlock+={Stmt::call(s@src, receiver@decl, s@decl, parameter) | read(parameter, _, _) <- nestedReads};
 			currentBlock+={Stmt::call(s@src, receiver@decl, s@decl, parameter) | call(parameter, _, _, _) <- nestedReads};	
+			println("<s@decl> throws exception <exceptions[s@decl] ? {}>!");
 		}
 		case s:Statement::variable(name,_,rhs): {
 			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(rhs), env);
@@ -350,9 +354,14 @@ tuple[set[Stmt], set[Stmt], Environment] dealWithStmts(Declaration m , Statement
 			return <currentBlock, potentialStmt, addToReturnEnvironment(env)>;
 		}
 		case s:Statement::\return(exp):{
-			<unnestedStmts, env, nestedReads, _, _> = dealWithStmts(m, \expressionStatement(cond), env);
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(cond), env);
 			currentBlock += unnestedStmts + nestedReads;
 			return <currentBlock, potentialStmt, addToReturnEnvironment(env)>;
+		}
+		case s:Statement::\try(b,catchStmts):{
+			<unnestedStmts, nestedReads, env> = dealWithStmts(m, b, env);
+			currentBlock += unnestedStmts;
+			println("I am in a try");
 		}
 	}
 	return <currentBlock, potentialStmt, env>;
