@@ -13,7 +13,7 @@ data Decl
 
 data Stmt
 	= read(loc id, loc variable, loc writtenBy)
-	| newAssign(loc id, loc target, loc constructor, list[loc] actualParameters)
+	| create(loc id, loc constructor, loc actualParameters)
 	| assign(loc id, loc target, loc dependsOn)
 	| call(loc id, loc receiver, loc method, loc parameter)//, list[loc] actualParameters)
 	| lock(loc id, loc lock, set[Stmt] stmts)
