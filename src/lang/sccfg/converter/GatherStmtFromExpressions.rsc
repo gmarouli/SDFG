@@ -1,4 +1,4 @@
-module lang::sccfg::ast::util::GatherStmtFromExpressions
+module lang::sccfg::converter::GatherStmtFromExpressions
 
 import IO;
 import Set;
@@ -7,10 +7,10 @@ import String;
 import lang::sccfg::ast::DataFlowLanguage;
 import lang::java::m3::TypeSymbol;
 import lang::java::jdt::m3::AST;
-import lang::sccfg::ast::util::ContainersManagement;
-import lang::sccfg::ast::util::EnvironmentManagement;
-import lang::sccfg::ast::util::ControlFlowHelpers;
-import lang::sccfg::ast::Java2DFG;
+import lang::sccfg::converter::util::ContainersManagement;
+import lang::sccfg::converter::util::EnvironmentManagement;
+import lang::sccfg::converter::util::ControlFlowHelpers;
+import lang::sccfg::converter::Java2DFG;
 
 //The functions are ordered according to the rascal/src/org/rascalImpl/library/lang/java/m3/AST.rsc [last accessed 13/5/2014]
 
@@ -107,7 +107,7 @@ tuple[set[Stmt], set[Stmt], Environment, map[loc, Environment]] gatherStmtFromEx
 
 //qualifiedName(Expression qualifier, Expression expression)
 tuple[set[Stmt], set[Stmt], Environment, map[loc, Environment]] gatherStmtFromExpressions(Declaration m , Expression e:qualifiedName(q,exp), Environment env, map[loc, Environment] exs, set[Stmt] stmts){
-	println("Found qualified name in: <e>!");
+	assert false : "Found qualified name in: <e>!";
 	return <stmts, {}, env, exs>;
 }
 
@@ -149,7 +149,7 @@ tuple[set[Stmt], set[Stmt], Environment, map[loc, Environment]] gatherStmtFromEx
 		stmts += potential;
 	}
 	stmts+={Stmt::call(e@src, receiver@decl, e@decl, arg) | arg <- getDependencyIds(potential)};	
-	println("<e@decl> throws exception <exceptions[e@decl] ? {}>!");
+
 	for(ex <- exceptions[e@decl] ? {}){
 		if(ex in exs){
 			exs[ex] = merge(exs[ex],env);
@@ -188,13 +188,13 @@ tuple[set[Stmt], set[Stmt], Environment, map[loc, Environment]] gatherStmtFromEx
 
 //this(Expression exp)
 tuple[set[Stmt], set[Stmt], Environment, map[loc, Environment]] gatherStmtFromExpressions(Declaration m , Expression e:this(exp), Environment env, map[loc, Environment] exs, set[Stmt] stmts){
-	println("Found this with expression in: <e>!");
+	assert false : "Found this with expression in: <e>!";
 	return <stmts, {}, env, exs>;
 }
 
 //super()
 tuple[set[Stmt], set[Stmt], Environment, map[loc, Environment]] gatherStmtFromExpressions(Declaration m , Expression e:super(), Environment env, map[loc, Environment] exs, set[Stmt] stmts){
-	println("Found super in: <e>!");
+	assert false : "Found super in: <e>!";
 	return <stmts, {}, env, exs>;
 }
 
@@ -206,7 +206,7 @@ tuple[set[Stmt], set[Stmt], Environment, map[loc, Environment]] gatherStmtFromEx
 //infix(Expression lhs, str operator, Expression rhs, list[Expression] extendedOperands)
 tuple[set[Stmt], set[Stmt], Environment, map[loc, Environment]] gatherStmtFromExpressions(Declaration m, Expression e:infix(lhs, operator, rhs, ext), Environment env, map[loc, Environment] exs, set[Stmt] stmts){
 	if(ext!=[]){
-		println("Found extended operands! <ext>");
+		assert false : "Found extended operands! <ext>";
 	}
 	if(operator == "&&" || operator == "||"){
 		return shortCircuit(m, lhs, rhs, env, exs, stmts);
