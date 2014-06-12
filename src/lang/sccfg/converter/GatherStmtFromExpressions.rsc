@@ -156,7 +156,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gath
 		stmts += potential;
 	}
 	stmts+={Stmt::call(e@src, receiver@decl, e@decl, arg) | arg <- getDependencyIds(potential)};	
-
+	
 	for(ex <- exceptions[e@decl] ? {}){
 		if(ex in exs){
 			exs[ex] = merge(exs[ex],env);
