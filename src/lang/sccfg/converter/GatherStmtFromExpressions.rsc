@@ -212,11 +212,8 @@ tuple[set[Stmt], set[Stmt], Environment, map[loc, Environment]] gatherStmtFromEx
 		return shortCircuit(m, lhs, rhs, env, exs, stmts);
 	}
 	else{
-		<stmtsLhs, potentialLhs, envLhs, exs> = gatherStmtFromExpressions(m, lhs, env, exs, stmts);
-		<stmtsRhs, potentialRhs, envRhs, exs> = gatherStmtFromExpressions(m, rhs, env, exs, stmts);
-		
-		env = mergeNestedEnvironment(env, envLhs);
-		env = mergeNestedEnvironment(env, envRhs);
+		<stmtsLhs, potentialLhs, env, exs> = gatherStmtFromExpressions(m, lhs, env, exs, stmts);
+		<stmtsRhs, potentialRhs, env, exs> = gatherStmtFromExpressions(m, rhs, env, exs, stmts);
 		 
 		return <stmtsLhs + stmtsRhs, potentialLhs + potentialRhs, env, exs>;
 	}
