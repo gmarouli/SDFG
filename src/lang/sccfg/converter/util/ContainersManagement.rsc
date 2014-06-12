@@ -1,4 +1,4 @@
-module lang::sccfg::ast::util::ContainersManagement
+module lang::sccfg::converter::util::ContainersManagement
 
 import Set;
 import List;

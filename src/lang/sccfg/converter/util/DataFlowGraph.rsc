@@ -1,7 +1,7 @@
 module lang::sccfg::ast::util::DataFlowGraph
 
 import lang::sccfg::ast::DataFlowLanguage;
-import lang::sccfg::ast::Java2DFG;
+import lang::sccfg::converter::Java2DFG;
 
 import IO;
 import List;
