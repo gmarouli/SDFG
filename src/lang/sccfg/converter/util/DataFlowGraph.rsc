@@ -12,7 +12,9 @@ public data GraphNode = access(loc address, loc variable)
 alias DFG = rel[GraphNode from, GraphNode to];
 
 DFG buildGraph(Program p){
-	DFG g = buildDataDependencies(p) + buildSynchronizedDependencies(p);
+	DFG g = buildDataDependencies(p) 
+		//+ buildSynchronizedDependencies(p)
+		;
 	return g + buildVolatileDependencies(p, g);
 }
 	 
@@ -25,12 +27,12 @@ DFG buildDataDependencies(Program p)
 	 + { <access(to, varTo), access(from, varFrom)> | read(to, varTo, dependOn) <- p.statements, read(from, varFrom, _) <- p.statements, dependOn == from}	
 	;
 	
-DFG buildSynchronizedDependencies(Program p)
-	 //acquire dependency from synchronized
-	 = { <access(getIdFromStmt(stmt), getVarFromStmt(stmt)), GraphNode::lock(address, l)> | Stmt::lock(address, l, stmts) <- p.statements, stmt <- stmts}
-	 //release dependency from synchronized
-	 + { <GraphNode::lock(address, l), access(getIdFromStmt(stmt), getVarFromStmt(stmt))> | Stmt::lock(address, l, stmts) <- p.statements, stmt <- stmts}
-	;
+//DFG buildSynchronizedDependencies(Program p)
+//	 //acquire dependency from synchronized
+//	 = { <access(getIdFromStmt(stmt), getVarFromStmt(stmt)), GraphNode::lock(address, l)> | Stmt::lock(address, l, stmts) <- p.statements, stmt <- stmts}
+//	 //release dependency from synchronized
+//	 + { <GraphNode::lock(address, l), access(getIdFromStmt(stmt), getVarFromStmt(stmt))> | Stmt::lock(address, l, stmts) <- p.statements, stmt <- stmts}
+//	;
 	
 DFG buildVolatileDependencies(Program p, DFG g)
 	//acquire dependency from volatile

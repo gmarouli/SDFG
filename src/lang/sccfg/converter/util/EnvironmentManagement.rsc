@@ -40,6 +40,18 @@ map[loc,set[loc]] merge(map[loc,set[loc]] env1, map[loc,set[loc]] env2){
 	return env1;
 }
 
+map[str, map[loc, set[loc]]] mergeExceptions(map[str, map[loc, set[loc]]] exs1, map[str, map[loc, set[loc]]] exs2){
+	for(ex <- exs2){
+		if(ex in exs1){
+			exs1[ex] = merge(exs1[ex], exs2[ex]);
+		}
+		else{
+			exs1[ex] = exs2[ex];
+		}
+	}
+	return exs1;
+}
+
 FlowEnvironment mergeBreak(flowEnvironment(contEnv, brEnv), map[loc,set[loc]] current)
 	= flowEnvironment(contEnv, merge(brEnv, current));
 

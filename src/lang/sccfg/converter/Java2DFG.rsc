@@ -15,7 +15,7 @@ import lang::sccfg::converter::GatherStmtFromStatements;
 
 Program createDFG(loc project) = createDFG(createAstsFromEclipseProject(project, true));
 
-map[loc, set[loc]] exceptions = ();
+public map[loc, set[str]] exceptions = ();
 
 Program createDFG(set[Declaration] asts) {
 	println("Getting decls");
@@ -80,94 +80,32 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 	set[Stmt] result = {};
 	for (m:Declaration::method(_, _, _, ex, _) <- allMethods) {
 		if(ex != []){
-			exceptions[m@decl] = {e@decl | e <- ex};
+			exceptions[m@decl] = {e@decl.path | e <- ex};
 		}
 	}
-	println(exceptions);
 	for (m:Declaration::method(_, _, parameters, ex, b) <- allMethods) {
 		
 		//determine lock
-		loc lock = unlocked;
+		rel[loc,loc] locks = {};
 		for(Decl::method(id, _, l) <- decls){
 			if(id.path == m@decl.path)
-				lock = l;
+				locks += {<m@src, l>};
 		} 
 		//set up environment with parameters and fields
 		map[loc, set[loc]] env = ( p@decl : {p@src} | p <- parameters) + ( field : {emptyId} | field <- fieldsPerClass[extractClassName(m@decl)] ? {}) + ( field : {emptyId} | sc <- inheritingClasses[extractClassName(m@decl)] ? {}, field <- fieldsPerClass[sc] ? {});
-		<methodStmts, _, _> = visitStatements(m, b, env, (), {});
-		//lock statements if synchronized
-		if(lock != unlocked){
-			methodStmts += {Stmt::lock(m@src, lock, {s | s <- methodStmts})};
+		set[Stmt] methodStmts = {};
+		
+		top-down-break visit(b) {
+			case Expression e : <methodStmts, _, env, _> = gatherStmtFromExpressions(m, e, env, locks, methodStmts);
+			case Statement s : <methodStmts, env, _, _> = gatherStmtFromStatements(m, s, env, FlowEnvironment::flowEnvironment((),()), locks, methodStmts);
 		}
+		
 		result+= methodStmts;
 	}	
 	return result;
 }
 
-
-tuple[set[Stmt], map[loc, set[loc]], map[loc, map[loc, set[loc]]]] visitStatements(Declaration m , Statement b, map[loc, set[loc]] env, map[loc, map[loc, set[loc]]] exs, set[Stmt] stmts){
-	top-down-break visit(b) {
-		case Expression e : <stmts, _, env, exs> = gatherStmtFromExpressions(m, e, env, exs, stmts);
-		case Statement s : <stmts, env, _, exs> = gatherStmtFromStatements(m, s, env, flowEnvironment((),()), exs, stmts);
-	}
-	return <stmts, env, exs>;
-}
-
-
-//	top-down-break visit(b) {
-//		case s:Statement::variable(name,_,rhs): {
-//			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(rhs), env);
-//			currentBlock += unnestedStmts + nestedReads;
-//			if(nestedReads == {})
-//				currentBlock += {Stmt::assign(s@src, s@decl, emptyId)};
-//			else{
-//				currentBlock += {Stmt::assign(s@src, s@decl, id) | Stmt::read(id, _, _) <- nestedReads}; //have to find the right read
-//				currentBlock += {Stmt::assign(s@src, s@decl, id) | Stmt::call(id, _, _) <- nestedReads};	
-//			}
-//			env = setVariableDependencies(env, s@decl, {s@src});
-//			potentialStmt = {};
-//		}
-//		case s:Statement::synchronizedStatement(expr, stmts):{
-//			<unnestedStmts, nestedReads, env> = dealWithStmts(m, \expressionStatement(expr), env);
-//			currentBlock += unnestedStmts + nestedReads;
-//			vlock = getDeclFromRead(getOneFrom(nestedReads));	
-//						
-//			<unnestedStmts, nestedReads, env> = dealWithStmts(m, stmts, env);
-//			currentBlock += unnestedStmts;
-//			
-//			currentBlock += {Stmt::lock(s@src, vlock, {lockedStmt | lockedStmt <- unnestedStmts})};
-//			
-//		}	
-
-
-
-
-
-//		case s:Statement::\try(b,catchStmts):{
-//			<unnestedStmts, nestedReads, env> = dealWithStmts(m, b, env);
-//			currentBlock += unnestedStmts;
-//			println("I am in a try");
-//		}
-//	}
-//	return <currentBlock, potentialStmt, env>;
-//}
-
-bool simpleExpression(fieldAccess(_,_,_)) = true;
-bool simpleExpression(fieldAccess(_,_)) = true;
-bool simpleExpression(qualifiedName(_,e)) = simpleExpression(e);
-bool simpleExpression(this()) = true;
-bool simpleExpression(this(_)) = true;
-bool simpleExpression(simpleName(_)) = true;
-default bool simpleExpression(Expression e) = false;
-
-bool isArray(arrayAccess(_,_)) = true;
-default bool isArray(e) = false; 
-
-Expression removeNesting(cast(_, e)) = removeNesting(e);
-Expression removeNesting(\bracket(e)) = removeNesting(e);
-default Expression removeNesting(Expression e) = e;
-
-private str extractClassName(loc method) 
+public str extractClassName(loc method) 
 	= substring(method.path,0,findLast(method.path,"/"));
 	
 loc getIdFromStmt(Stmt::read(id, _, _)) = id;
