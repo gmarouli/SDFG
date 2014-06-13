@@ -16,9 +16,10 @@ import lang::sccfg::converter::Java2DFG;
 //The functions are ordered according to the rascal/src/org/rascalImpl/library/lang/java/m3/AST.rsc [last accessed 13/5/2014]
 
 //arrayAccess(Expression array, Expression index)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:arrayAccess(ar, index), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
-	<stmts, indexRead, env, exs> = gatherStmtFromExpressions(m, index, env, exs, stmts);
-	stmts += indexRead;
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:arrayAccess(ar, index), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	<stmts, indexRead, env, exs> = gatherStmtFromExpressions(m, index, env, exs, locks, stmts);
+	stmts = addAndLock(indexRead, locks, stmts);
+
 	
 	potential = {Stmt::read(ar@src, ar@decl, id) | id <- getDependencyIds(indexRead)}; //have to find the right read	
 	
@@ -26,16 +27,15 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gath
 }
 
 //newArray(Type type, list[Expression] dimensions, list[Expression] init)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:newArray(_, dimensions, init), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:newArray(_, dimensions, init), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
 	potential1 = {};
 	for(d <- dimensions){
-		<stmts, potential1, env, exs> = gatherStmtFromExpressions(m, d, env, exs, stmts);
-		stmts += potential1;
+		<stmts, potential1, env, exs> = gatherStmtFromExpressions(m, d, env, exs, locks, stmts);
 	}
 	
-	<stmts, potential2, env, exs> = gatherStmtFromExpressions(m, init, env, exs, stmts);
-	stmts += potential2;
+	<stmts, potential2, env, exs> = gatherStmtFromExpressions(m, init, env, exs, locks, stmts);
 	potential = potential1 + potential2;
+	stmts = addAndLock(potential, locks, stmts);
 		
 	loc con = |java+constructor:///array|;
 	potential = {create(e@src, con, id) | id <- getDependencyIds(potential)};
@@ -43,28 +43,27 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gath
 }
 
 //newArray(Type type, list[Expression] dimensions)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:newArray(t, dimensions), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
-	return gatherStmtFromExpressions(m , Expression::newArray(t, dimensions, Expression::null())[@src=e@src][@typ=e@typ], env, exs, stmts);
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:newArray(t, dimensions), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	return gatherStmtFromExpressions(m , Expression::newArray(t, dimensions, Expression::null())[@src=e@src][@typ=e@typ], env, exs, locks, stmts);
 }
 
 //arrayInitializer(list[Expression] elements)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:arrayInitializer(list[Expression] elements), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:arrayInitializer(list[Expression] elements), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
 	potential = {};
 	for(el <- elements){
-		<stmts, potential, env, exs> = gatherStmtFromExpressions(m, el, env, exs, stmts);
-		stmts += potential;
+		<stmts, potential, env, exs> = gatherStmtFromExpressions(m, el, env, exs, locks, stmts);
+		stmts = addAndLock(potential, locks, stmts);
 	}
 	return <stmts, potential, env, exs>;
 }
 
 //assignment(Expression lhs, str operator, Expression rhs)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:assignment(lhs,_,rhs), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
-	<stmts, potentialReads, env, exs> = gatherStmtFromExpressions(m, rhs, env, exs, stmts);
-	stmts += potentialReads;
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:assignment(lhs,_,rhs), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	<stmts, potentialReads, env, exs> = gatherStmtFromExpressions(m, rhs, env, exs, locks, stmts);	
+	<stmts, potentialWrites, env, exs> = gatherStmtFromExpressions(m, lhs, env, exs, locks, stmts);
 	
-	<stmts, potentialWrites, env, exs> = gatherStmtFromExpressions(m, lhs, env, exs, stmts);
-	stmts += { Stmt::assign(e@src, var, id) | Stmt:read(_, var, _) <- potentialWrites, id <- getDependencyIds(potentialReads)};
-	
+	stmts = addAndLock(potentialReads + { Stmt::assign(e@src, var, id) | Stmt:read(_, var, _) <- potentialWrites, id <- getDependencyIds(potentialReads)}, locks, stmts);
+
 	<assigned,_> = takeOneFrom(potentialWrites);
 	var = getVarFromStmt(assigned);
 	env[var] = {e@src};
@@ -74,31 +73,32 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gath
 }
 
 //cast(Type type, Expression expression)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:cast(_, exp), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
-	return gatherStmtFromExpressions(m, exp, env, exs, stmts);
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:cast(_, exp), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	return gatherStmtFromExpressions(m, exp, env, exs, locks, stmts);
 }
 
 //newObject(Expression expr, Type type, list[Expression] args, Declaration class)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:newObject(expr, _, args, _), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
-	return gatherStmtFromExpressions(m, Expression::newObject(expr, args)[@src = e@src][@decl = e@decl], env, exs, stmts);
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:newObject(expr, _, args, _), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	return gatherStmtFromExpressions(m, Expression::newObject(expr, args)[@src = e@src][@decl = e@decl], env, exs, locks, stmts);
 }
 //newObject(Expression expr, Type type, list[Expression] args)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:newObject(expr, _, args), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
-	return gatherStmtFromExpressions(m, Expression::newObject(expr, args)[@src = e@src][@decl = e@decl], env, exs, stmts);
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:newObject(expr, _, args), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	return gatherStmtFromExpressions(m, Expression::newObject(expr, args)[@src = e@src][@decl = e@decl], env, exs, locks, stmts);
 }
 
 //newObject(Expression expr, list[Expression] args, Declaration class)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:newObject(expr, args, _), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
-	return gatherStmtFromExpressions(m, Expression::newObject(expr, args)[@src=e@src][@decl = emptyId], env, exs, stmts);
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:newObject(expr, args, _), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	return gatherStmtFromExpressions(m, Expression::newObject(expr, args)[@src=e@src][@decl = emptyId], env, exs, locks, stmts);
 }
 
 //newObject(Expression expr, list[Expression] args)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:newObject(expr, args), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:newObject(expr, args), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
 	potential = {};
 	for(arg <- args){
-		<stmts, potential, env, exs> = gatherStmtFromExpressions(m, arg, env, exs, stmts);
-		stmts += potential;
+		<stmts, potential, env, exs> = gatherStmtFromExpressions(m, arg, env, exs, locks, stmts);
 	}
+	stmts = addAndLock(potential, locks, stmts);
+	
 	loc con = |java+constructor:///|;
 	con.path = e@decl.path ? emptyId;
 	potential = {create(e@src, con, id) | id <- getDependencyIds(potential)};
@@ -107,18 +107,18 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gath
 }
 
 //qualifiedName(Expression qualifier, Expression expression)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:qualifiedName(q,exp), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:qualifiedName(q,exp), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
 	assert false : "Found qualified name in: <e>!";
 	return <stmts, {}, env, exs>;
 }
 
 //conditional(Expresion cond, Expression ifB, Expression elseB)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:conditional(cond,ifB,elseB), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){	
-	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, cond, env, exs, stmts);
-	stmts += potential;
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:conditional(cond,ifB,elseB), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){	
+	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, cond, env, exs, locks, stmts);
+	stmts = addAndLock(potential, locks, stmts);
 	
-	<stmts, potentialIf, envIf, exs> = gatherStmtFromExpressions(m, ifBranch, env, exs, stmts);				
-	<stmts, potentialElse, envElse, exs> = gatherStmtFromExpressions(m, elseBranch, env, exs, stmts);
+	<stmts, potentialIf, envIf, exs> = gatherStmtFromExpressions(m, ifBranch, env, exs, locks, stmts);				
+	<stmts, potentialElse, envElse, exs> = gatherStmtFromExpressions(m, elseBranch, env, exs, locks, stmts);
 
 	env = updateEnvironment(env,envIf);
 	env = mergeNestedEnvironment(env,envElse);
@@ -126,36 +126,37 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gath
 }
 
 //fieldAccess(bool isSuper, Expression expression, str name)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:fieldAccess(_,exp,_), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
-	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, exp, env, exs, stmts);
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:fieldAccess(_,exp,_), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, exp, env, exs, locks, stmts);
 	potential = {Stmt::read(e@src, e@decl, writtenBy) | writtenBy <- env[e@decl] ? {emptyId}} + {Stmt::read(e@src, e@decl, dependOn) | dependOn <- getDependencyIds(potential)};	
 	return <stmts, potential, env, exs>;
 }
 
 //fieldAccess(bool isSuper, str name)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:fieldAccess(_, _), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:fieldAccess(_, _), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
 	potential = {Stmt::read(e@src, e@decl, writtenBy) | writtenBy <- env[e@decl] ? {emptyId}};	
 	return <stmts, potential, env, exs>;
 }
 
 //instanceof(Expression leftside, Type rightSide)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:\instanceof(lsh,_), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
-	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, lhs, env, exs, stmts);
-	return <stmts+potential, {}, env, exs>;
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:\instanceof(lsh,_), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, lhs, env, exs, locks, stmts);
+	stmts = addAndLock(potential, locks, stmts);
+	return <stmts, {}, env, exs>;
 }
 
 //methodCall(bool isSuper, str name, list[Expression] arguments)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:methodCall(isSuper,name,args), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
-	return gatherStmtFromExpressions(m, \methodCall(isSuper, \this(), name, args), env, exs, stmts);
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:methodCall(isSuper,name,args), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	return gatherStmtFromExpressions(m, \methodCall(isSuper, \this(), name, args), env, exs, locks, stmts);
 }
 
 //method(bool isSuper, Expression receiver, str name, list[Expression] arguments)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:methodCall(isSuper, receiver, name, args), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:methodCall(isSuper, receiver, name, args), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	potential = {};
 	for(arg <- args){
-		<stmts, potential, env, exs> = gatherStmtFromExpressions(m, arg, env, exs, stmts);
-		stmts += potential;
+		<stmts, potential, env, exs> = gatherStmtFromExpressions(m, arg, env, exs, locks, stmts);
 	}
-	stmts+={Stmt::call(e@src, receiver@decl, e@decl, arg) | arg <- getDependencyIds(potential)};	
+	stmts = addAndLock(potential + {Stmt::call(e@src, receiver@decl, e@decl, arg) | arg <- getDependencyIds(potential)}, locks, stmts);
 	
 	for(ex <- exceptions[e@decl] ? {}){
 		if(ex in exs){
@@ -169,86 +170,84 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gath
 }
 
 //variable(str name, int extraDimensions, Expression init)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:variable(name,_,rhs), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
-	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, rhs, env, exs, stmts);
-	stmts += potential;
-	stmts += {Stmt::assign(e@src, e@decl, id) | id <- getDependencyIds(potential)};
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:variable(name,_,rhs), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, rhs, env, exs, locks, stmts);
+	stmts = addAndLock(potential + {Stmt::assign(e@src, e@decl, id) | id <- getDependencyIds(potential)}, locks, stmts);
 	env[e@decl] = {e@src};
 	return <stmts, {}, env, exs>;
 }
 
 //variable(str name, int extraDimensions)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:variable(name,_), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:variable(name,_), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
 	return <stmts, {}, env, exs>;
 }
 
 //bracket(Expression exp);
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:\bracket(exp), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
-	return gatherStmtFromExpressions(m, exp, env, exs, stmts);
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:\bracket(exp), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	return gatherStmtFromExpressions(m, exp, env, exs, locks, stmts);
 }
 
 //this()
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:this(), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:this(), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
 	potential = {Stmt::read(e@src, |java+field:///|+ extractClassName(m@decl)+"/this", emptyId)};
 	return <stmts, potential, env, exs>;
 }
 
 //this(Expression exp)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:this(exp), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:this(exp), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
 	assert false : "Found this with expression in: <e>!";
 	return <stmts, {}, env, exs>;
 }
 
 //super()
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:super(), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:super(), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
 	assert false : "Found super in: <e>!";
 	return <stmts, {}, env, exs>;
 }
 
 //declarationExpression(Declaration d)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:declarationExpression(d), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
-	return visitStatements(m, declarationStatement(d), env, exs, stmts);
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:declarationExpression(d), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	<stmts, env, exs> = visitStatements(m, declarationStatement(d), env, exs, locks, stmts); 
+	return <stmts, {}, env, exs>;
 }
 
 //infix(Expression lhs, str operator, Expression rhs, list[Expression] extendedOperands)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:infix(lhs, operator, rhs, ext), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:infix(lhs, operator, rhs, ext), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
 	if(ext!=[]){
 		assert false : "Found extended operands! <ext>";
 	}
 	if(operator == "&&" || operator == "||"){
-		return shortCircuit(m, lhs, rhs, env, exs, stmts);
+		return shortCircuit(m, lhs, rhs, env, exs, locks, stmts);
 	}
 	else{
-		<stmtsLhs, potentialLhs, env, exs> = gatherStmtFromExpressions(m, lhs, env, exs, stmts);
-		<stmtsRhs, potentialRhs, env, exs> = gatherStmtFromExpressions(m, rhs, env, exs, stmts);
+		<stmtsLhs, potentialLhs, env, exs> = gatherStmtFromExpressions(m, lhs, env, exs, locks, stmts);
+		<stmtsRhs, potentialRhs, env, exs> = gatherStmtFromExpressions(m, rhs, env, exs, locks, stmts);
 		 
 		return <stmtsLhs + stmtsRhs, potentialLhs + potentialRhs, env, exs>;
 	}
 }
 
 //postfix(Expression operand, str operator)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:postfix(operand, operator), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:postfix(operand, operator), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
 	if(operator == "++" || operator == "--"){
-		<stmts, potential, env, exs> = gatherStmtFromExpressions(m, operand, env, exs, stmts);
-		stmts += potential;
-		stmts += {Stmt::assign(e@src, operand@decl, id) | id <- getDependencyIds(potential)};
-	
+		<stmts, potential, env, exs> = gatherStmtFromExpressions(m, operand, env, exs, locks, stmts);
+		stmts = addAndLock(potential + {Stmt::assign(e@src, operand@decl, id) | id <- getDependencyIds(potential)}, locks, stmts);
+
 		potential = {Stmt::read(operand@src, operand@decl, writtenBy) | writtenBy <- env[operand@decl] ? {emptyId}};				
 		env[operand@decl] = {e@src};
 	
 		return <stmts, potential, env, exs>;
 	}
 	else{
-		return gatherStmtFromExpressions(m, operand, env, exs, stmts);
+		return gatherStmtFromExpressions(m, operand, env, exs, locks, stmts);
 	}
 }
 
 //prefix(str operator, Expression operand)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:postfix(operand, operator), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:postfix(operand, operator), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
 	if(operator == "++" || operator == "--"){
-		<stmts, potential, env, exs> = gatherStmtFromExpressions(m, operand, env, exs, stmts);
-		stmts += potential;
-		stmts += {Stmt::assign(e@src, operand@decl, id) | id <- getDependencyIds(potential)};
+		<stmts, potential, env, exs> = gatherStmtFromExpressions(m, operand, env, exs, locks, stmts);
+		stmts = addAndLock(potential + {Stmt::assign(e@src, operand@decl, id) | id <- getDependencyIds(potential)}, locks, stmts);
 	
 		env[operand@decl] = {e@src};
 		potential = {Stmt::read(operand@src, operand@decl, e@src)};
@@ -256,17 +255,17 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gath
 		return <stmts, potential, env, exs>;
 	}
 	else{
-		return gatherStmtFromExpressions(m, operand, env, exs, stmts);
+		return gatherStmtFromExpressions(m, operand, env, exs, locks, stmts);
 	}
 }
 
 //simpleName(str name)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:simpleName(name), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:simpleName(name), map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
 	potential = {Stmt::read(e@src, e@decl, writtenBy) | writtenBy <- env[e@decl] ? {emptyId}};	
 	return <stmts, potential, env, exs>;
 }
 
-default tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e, map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[Stmt] stmts){
+default tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e, map[loc,set[loc]] env, map[loc, map[loc,set[loc]]] exs, set[tuple[loc,loc]] locks, set[Stmt] stmts){
 	return <stmts, {}, env, exs>;
 }
 
@@ -280,4 +279,10 @@ set[loc] getDependencyIds(set[Stmt] potential){
 			+  { id | Stmt::create(id, _, _) <- potential}
 			;	
 	}
+}
+
+set[Stmt] addAndLock(set[Stmt] newStmts, set[tuple[loc,loc]] locks, set[Stmt] stmts){
+	stmts += newStmts;
+	stmts += { Stmt::lock(idL, l, id) | <idL, l> <- locks, id <- getIdFromStmt(newStmts)};
+	return stmts;
 }
