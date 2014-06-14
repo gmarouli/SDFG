@@ -17,7 +17,7 @@ import lang::sccfg::converter::Java2DFG;
 //assert(Expression expression, Expression message)
 
 //block(list[Statement] statements)
-tuple[set[Stmt], map[loc,set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\block(sB), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc,set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\block(sB), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	envInner = env;
 	exs = ();
 	fenv = flowEnvironment((),());
@@ -30,35 +30,35 @@ tuple[set[Stmt], map[loc,set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]
 }
 
 //break()
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\break(), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\break(), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	return <stmts, env, initializeBreakEnv(env), ()>;
 }
 
 //break("")
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\break(""), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\break(""), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	// ISSUE: what if break is not in a branch? then it is perceived partly as a continue
 	return <stmts, env, initializeBreakEnv(env), ()>;
 }
 
 //break(str label)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\break(_), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\break(_), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	assert false : "Labeled statement (break) found!!!";
 	return <stmts, env, initializeBreakEnv(env), ()>;
 }
 
 //continue()
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\continue(), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\continue(), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	return <stmts, env, initializeContinueEnv(env), ()>;
 }
 
 //continue(str label)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\continue(_), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\continue(_), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	assert false : "Labeled statement (continue) found!!!";
 	return <stmts, env, initializeContinueEnv(env), ()>;
 }
 
 //do(Statement body, Expression condition)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\do(b, cond), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\do(b, cond), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 		
 	//executed once all the reads and assigns added missing connections to itself
 	<stmts, env, fenvInner, exs> = gatherStmtFromStatements(m, b, env, locks, stmts);
@@ -80,7 +80,7 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 }
 
 //foreach(Declaration parameter, Expression collection, Statement body)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\foreach(parameter, collection, body), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\foreach(parameter, collection, body), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	outerEnv = env;
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, collection, env, locks, stmts);
 	addAndLock(potential + {Stmt::assign(s@src, parameter@decl, s@src)}, locks, stmts);
@@ -107,23 +107,23 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 }
 
 //for(list[Expression] initializers, Expression condition, list[Expression] updaters, Statement body)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\for(initializers, cond, updaters, body), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\for(initializers, cond, updaters, body), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	return dealWithLoopsConditionFirst(m, initializers, cond, updaters, body, env, locks, stmts);
 } 
 
 //for(list[Expression] initializers, list[Expression] updaters, Statement body)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\for(initializers, updaters, body), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\for(initializers, updaters, body), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	return dealWithLoopsConditionFirst(m, initializers, Expression::\null(), updaters, body, env, locks, stmts);
 }
 
 //expressionStatement(Expression stmt)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\expressionStatement(e), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\expressionStatement(e), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, e, env, locks, stmts);
 	return <stmts, env, emptyFlowEnvironment(), exs>;
 }
 
 //if(Expression condition, Statement thenB)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\if(cond, thenB), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\if(cond, thenB), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, cond, env, locks, stmts);
 	addAndLock(potential, locks, stmts);
 	
@@ -135,7 +135,7 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 }
 
 //if(Expression condition, Statement thenB, Statement elseB)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\if(cond, thenB, elseB), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\if(cond, thenB, elseB), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, cond, env, locks, stmts);
 	addAndLock(potential, locks, stmts);
 	<stmts, env, fenv, exsC> = branching(m, thenB, elseB, env, locks, stmts); 
@@ -143,25 +143,25 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 }
 
 //label(str name, Statement body)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\label(_, _), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\label(_, _), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	assert false: "Labeled block";
 	return <stmts, env, emptyFlowEnvironment(), ()>;
 }
 
 //return(Expression expression)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\return(exp), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\return(exp), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, exp, env, locks, stmts);
 	addAndLock(potential, locks, stmts);
 	return <stmts, env, initializeReturnEnvironment(env), exs>;
 }
 
 //return()
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\return(), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\return(), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	return <stmts, env, initializeReturnEnvironment(env), exs>;
 }
 
 //switch(Expression exp, list[Statement] statements)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\switch(exp, body), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\switch(exp, body), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, exp, env, locks, stmts);
 	addAndLock(potential, locks, stmts);
 	
@@ -227,24 +227,24 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 }
 
 //synchronizedStatement(Expression lock, Statement body)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:syncronizedStatement(l, body), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:syncronizedStatement(l, body), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, l, env, locks, stmts);
 	stmts = addAndLock(potential, locks, stmts);
 	
 	vlock = getDeclFromRead(getOneFrom(potential));	
-	<stmts, env, fenv, exsC> = gatherStmtFromStatements(m, b, env, locks + {<s@src, vlock>}, stmts);
+	<stmts, env, fenv, exsC> = gatherStmtFromStatements(m, b, env, [<s@src, vlock>] + locks, stmts); //order is important every lock is locked to the next ones
 	exs = mergeExceptions(exs, exsC);
 	return <stmts, env, fenv, exsC>;
 }
 
 //throw(Expression exp)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\throw(exp), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\throw(exp), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	exs = (extractClassName(exp@decl) : env);
 	return <stmts, env, emptyFlowEnnvironment(), exs>;
 }
 
 //\try(Statement body, list[Statement] catchClauses)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\try(body, catchStatements), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\try(body, catchStatements), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, env, fenv, exsInner> = gatherStmtFromStatements(m, body, env, locks, stmts);	
 	env = updateEnvironment(env, envTry);
 	exitEnv = env;	
@@ -259,7 +259,7 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 }
 
 //\try(Statement body, list[Statement] catchClauses, Statement \finally)  
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\try(body, catchStatements, fin), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\try(body, catchStatements, fin), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, envTry, fenv, exs> = gatherStmtFromStatements(m, body, env, locks, stmts);
 	env = updateEnvironment(env, envTry);	
 	exitEnv = env;
@@ -287,7 +287,7 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 }
 
 //\catch(Declaration exception, Statement body)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromCatchStatements(Declaration m, Statement s:\catch(except, body), map[loc, set[loc]] env, rel[loc,loc] locks, map[str, map[loc, set[loc]]] exs, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromCatchStatements(Declaration m, Statement s:\catch(except, body), map[loc, set[loc]] env, lrel[loc, loc] locks, map[str, map[loc, set[loc]]] exs, set[Stmt] stmts){
 	envCatch = ();
 	fenv = emptyFlowEnvironment();
 	visit(except){
@@ -307,7 +307,7 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 }
 
 //\declarationStatement(Declaration declaration)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\declarationStatement(d), map[loc, set[loc]] env, rel[loc,loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\declarationStatement(d), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	exs = ();
 	fenv = emptyFlowEnvironment();
 	top-down-break visit(d) {
