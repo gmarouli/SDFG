@@ -7,6 +7,7 @@ import lang::sccfg::ast::DataFlowLanguage;
 
 data FlowEnvironment = flowEnvironment(map[loc,set[loc]] continueEnv, map[loc,set[loc]] breakEnv, map[loc,set[loc]] retEnv);
 
+FlowEnvironment emptyFlowEnvironment() = flowEnvironment((), (), ());
 map[loc,set[loc]] getContinueEnvironment(flowEnvironment(env, _, _)) = env;
 map[loc,set[loc]] getBreakEnvironment(flowEnvironment(_, env, _)) = env;
 map[loc,set[loc]] getReturnEnvironment(flowEnvironment(_, _, env)) = env;
@@ -40,6 +41,18 @@ map[loc,set[loc]] merge(map[loc,set[loc]] env1, map[loc,set[loc]] env2){
 	}
 	return env1;
 }
+
+FlowEnvironment mergeFlow(flowEnvironment(envC1, envB1, envR1), flowEnvironment(envCont2, envBr2, envR2))
+	= flowEnvironment(merge(envC1, envC2), merge(envB1, envB2), merge(envR1, envR2)); 
+	
+FlowEnvironment updateContinue(flowEnvironment(envC, envB, envR), map[loc,set[loc]] env)
+	= flowEnvironment(updateEnvironment(envC, env), envB, envR); 
+
+FlowEnvironment updateBreak(flowEnvironment(envC, envB, envR), map[loc,set[loc]] env)
+	= flowEnvironment(envC, updateEnvironment(envB, env), envR); 
+
+FlowEnvironment updateReturn(flowEnvironment(envC, envB, envR), map[loc,set[loc]] env)
+	= flowEnvironment(envC, envB, updateEnvironment(envR, env)); 
 
 map[str, map[loc, set[loc]]] mergeExceptions(map[str, map[loc, set[loc]]] exs1, map[str, map[loc, set[loc]]] exs2){
 	for(ex <- exs2){
