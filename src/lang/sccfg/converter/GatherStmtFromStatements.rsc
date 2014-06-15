@@ -27,7 +27,8 @@ tuple[set[Stmt], map[loc,set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]
 	addAndLock(potential, locks, stmts);
 	exs = mergeExceptions(exs, exsM);
 	//The assert is a possible an exit point, in case of finally we can see it as a return
-	return <stmts, mergeNestedEnvironment(env,envM), initializeReturnEnvironment(env), exs>;
+	env = mergeNestedEnvironment(env,envM);
+	return <stmts, env, initializeReturnEnvironment(env), exs>;
 }
 
 //block(list[Statement] statements)
@@ -165,7 +166,7 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 //return(Expression expression)
 tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\return(exp), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, exp, env, locks, stmts);
-	addAndLock(potential, locks, stmts);
+	stmts = addAndLock(potential, locks, stmts);
 	return <stmts, env, initializeReturnEnvironment(env), exs>;
 }
 
@@ -359,7 +360,6 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 		stmts = addAndLock(potential, locks, stmts);
 		exs = mergeExceptions(exs,exsC);
 	}
-	
 	<stmts, potential, env, exsC> = gatherStmtFromExpressions(m, exp, env, locks, stmts);
 	exs = mergeExceptions(exs,exsC);
 	stmts = addAndLock(potential, locks, stmts);

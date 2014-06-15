@@ -88,7 +88,7 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		//determine lock
 		lrel[loc,loc] locks = [];
 		for(Decl::method(id, _, l) <- decls){
-			if(id.path == m@decl.path)
+			if((id.path == m@decl.path) && (l != unlocked))
 				locks += [<m@src, l>];
 		} 
 		//set up environment with parameters and fields

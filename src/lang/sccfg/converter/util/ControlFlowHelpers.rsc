@@ -9,17 +9,17 @@ import lang::java::jdt::m3::AST;
 import lang::sccfg::converter::GatherStmtFromStatements;
 import lang::sccfg::converter::GatherStmtFromExpressions;
 
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] branching(Declaration m, Statement ifBranch, Statement elseBranch, map[loc, set[loc]] env, FlowEnvironment fenv, rel[loc, loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] branching(Declaration m, Statement ifBranch, Statement elseBranch, map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 
-	<stmts, envIf, fenv, exsIf> = gatherStmtFromStatements(m, ifBranch, env, fenv, locks, stmts);				
-	<stmts, envElse, fenv, exsElse> = gatherStmtFromStatements(m, elseBranch, env, fenv, locks, stmts);
+	<stmts, envIf, fenvIf, exsIf> = gatherStmtFromStatements(m, ifBranch, env, locks, stmts);				
+	<stmts, envElse, fenvElse, exsElse> = gatherStmtFromStatements(m, elseBranch, env, locks, stmts);
 
 	env = updateEnvironment(env,envIf);
 	env = mergeNestedEnvironment(env,envElse);
-	return <stmts, env, fenv, mergeExceptions(exsIf, exsElse)>;
+	return <stmts, env, mergeFlow(fenvIf, fenvElse), mergeExceptions(exsIf, exsElse)>;
 }
 
-tuple[set[Stmt], set[Stmt], map[loc, set[loc]], map[str, map[loc, set[loc]]]] shortCircuit(Declaration m, Expression ifBranch, Expression elseBranch, map[loc, set[loc]] env, rel[loc, loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc, set[loc]], map[str, map[loc, set[loc]]]] shortCircuit(Declaration m, Expression ifBranch, Expression elseBranch, map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 
 	<stmts, potential, envComp, exsComp> = gatherStmtFromExpressions(m, ifBranch, env, locks, stmts);
 				
@@ -31,7 +31,7 @@ tuple[set[Stmt], set[Stmt], map[loc, set[loc]], map[str, map[loc, set[loc]]]] sh
 }
 
 
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] dealWithLoopsConditionFirst(Declaration m, list[Expression] initializers, Expression cond, list[Expression] updaters, Statement body, map[loc, set[loc]] env, FlowEnvironment fenv, rel[loc, loc] locks, set[loc] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] dealWithLoopsConditionFirst(Declaration m, list[Expression] initializers, Expression cond, list[Expression] updaters, Statement body, map[loc, set[loc]] env, lrel[loc, loc] locks, set[loc] stmts){
 	outerEnv = env;
 	exs = ();
 	for(i <- initializers){
@@ -45,7 +45,7 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 	
 	outerEnv = updateEnvironment(outerEnv, env);
 	
-	<stmts, env, fenvInner, exsC> = gatherStmtFromStatements(m, body, env, flowEnvironment((),()), locks, stmts);
+	<stmts, env, fenvInner, exsC> = gatherStmtFromStatements(m, body, env, locks, stmts);
 	exs = mergeExceptions(exs, exsC);
 	env = mergeNestedEnvironment(env, getContinueEnvironment(fenvInner));
 	
@@ -57,8 +57,8 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 	<stmts, potential, env, _> = gatherStmtFromExpressions(m, cond, env, locks, stmts);
 	stmts = addAndLock(potential, locks, stmts);
 	
-	<stmts, _, fenvInner, _> = gatherStmtFromStatements(m, body, env, flowEnvironment((),()), locks, stmts);
+	<stmts, _, fenvInner, _> = gatherStmtFromStatements(m, body, env, locks, stmts);
 	env = mergeNestedEnvironment(env, getBreakEnvironment(fenvInner));
 	
-	return <stmts, mergeNestedEnvironment(outerEnv, env), fenv, exs>;
+	return <stmts, mergeNestedEnvironment(outerEnv, env), emptyFlowEnvironment(), exs>;
 }
