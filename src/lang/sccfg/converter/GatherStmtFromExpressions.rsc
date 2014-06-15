@@ -250,14 +250,13 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gath
 }
 
 //prefix(str operator, Expression operand)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:postfix(operand, operator), map[loc,set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:prefix(operator, operand), map[loc,set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	if(operator == "++" || operator == "--"){
 		<stmts, potential, env, exs> = gatherStmtFromExpressions(m, operand, env, locks, stmts);
 		stmts = addAndLock(potential + {Stmt::assign(e@src, operand@decl, id) | id <- getDependencyIds(potential)}, locks, stmts);
-	
+		
 		env[operand@decl] = {e@src};
 		potential = {Stmt::read(operand@src, operand@decl, e@src)};
-		
 		return <stmts, potential, env, exs>;
 	}
 	else{
