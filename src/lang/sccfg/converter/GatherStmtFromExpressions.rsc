@@ -135,7 +135,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gath
 	env = mergeNestedEnvironment(env,envElse);
 	exs = mergeExceptions(exs,exsIf);
 	exs = mergeExceptions(exs,exsElse);
-	return <stmts, potentialIf + potentialElse, env, exs>;
+	return <stmts, potential + potentialIf + potentialElse, env, exs>;
 }
 
 //fieldAccess(bool isSuper, Expression expression, str name)
@@ -223,17 +223,19 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gath
 
 //infix(Expression lhs, str operator, Expression rhs, list[Expression] extendedOperands)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:infix(lhs, operator, rhs, ext), map[loc,set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
-	if(ext!=[]){
-		assert false : "Found extended operands! <ext>";
-	}
+	operands = [lhs,rhs] + ext;
 	if(operator == "&&" || operator == "||"){
-		return shortCircuit(m, lhs, rhs, env, locks, stmts);
+		return shortCircuit(m, operands, env, locks, stmts);
 	}
 	else{
-		<stmtsLhs, potentialLhs, env, exsLhs> = gatherStmtFromExpressions(m, lhs, env, locks, stmts);
-		<stmtsRhs, potentialRhs, env, exsRhs> = gatherStmtFromExpressions(m, rhs, env, locks, stmts);
-		 
-		return <stmtsLhs + stmtsRhs, potentialLhs + potentialRhs, env, mergeExceptions(exsLhs,exsRhs)>;
+		potential = {};
+		exs = ();
+		for(op <- operands){
+			<stmts, potentialOp, env, exsOp> = gatherStmtFromExpressions(m, op, env, locks, stmts);
+			potential += potentialOp;
+			exs = mergeExceptions(exs,exsOp);
+		}
+		return <stmts, potential, env, exs>;
 	}
 }
 

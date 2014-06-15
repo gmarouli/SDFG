@@ -19,15 +19,16 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 	return <stmts, env, mergeFlow(fenvIf, fenvElse), mergeExceptions(exsIf, exsElse)>;
 }
 
-tuple[set[Stmt], set[Stmt], map[loc, set[loc]], map[str, map[loc, set[loc]]]] shortCircuit(Declaration m, Expression ifBranch, Expression elseBranch, map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
-
-	<stmts, potential, envComp, exsComp> = gatherStmtFromExpressions(m, ifBranch, env, locks, stmts);
-				
-	<stmts, potentialOpt, envOpt, exsOpt> = gatherStmtFromExpressions(m, elseBranch, envComp, locks, stmts);
-
-	env = updateEnvironment(env, envComp);
-	env = mergeNestedEnvironment(env,envOpt);
-	return <stmts, potential + potentialOpt, env, mergeExceptions(exsComp, exsOpt)>;
+tuple[set[Stmt], set[Stmt], map[loc, set[loc]], map[str, map[loc, set[loc]]]] shortCircuit(Declaration m, list[Expression] e:[exp, *exps], map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
+	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, exp, env, locks, stmts);
+	envOp = env;
+	for(expRest <- exps){
+		<stmts, potentialOp, envOp, exsOp> = gatherStmtFromExpressions(m, expRest, envOp, locks, stmts);
+		env = mergeNestedEnvironment(env,envOp);
+		exs = mergeExceptions(exs, exsOp);
+		potential += potentialOp;
+	}			
+	return <stmts, potential, env, exs>;
 }
 
 
