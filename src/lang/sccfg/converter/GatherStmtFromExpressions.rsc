@@ -115,8 +115,12 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gath
 
 //qualifiedName(Expression qualifier, Expression expression)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:qualifiedName(q,exp), map[loc,set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
-	assert false : "Found qualified name in: <e>!";
-	return <stmts, {}, env, ()>;
+	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, q, env, locks, stmts);
+	stmts = addAndLock(potential, locks, stmts);
+	
+	<stmts, potentialRead, env, exsR> = gatherStmtFromExpressions(m, exp, env, locks, stmts);
+	stmts = addAndLock({read(addr, var, id) | Stmt::read(addr, var, _) <- potentialRead, id <- getDependencyIds(potential)}, locks, stmts);
+	return <stmts, potentialRead, env, mergeExceptions(exs, exsR)>;
 }
 
 //conditional(Expresion cond, Expression ifB, Expression elseB)
