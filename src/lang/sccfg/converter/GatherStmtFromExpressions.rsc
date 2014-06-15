@@ -128,8 +128,8 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gath
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, cond, env, locks, stmts);
 	stmts = addAndLock(potential, locks, stmts);
 	
-	<stmts, potentialIf, envIf, exsIf> = gatherStmtFromExpressions(m, ifBranch, env, locks, stmts);				
-	<stmts, potentialElse, envElse, exsElse> = gatherStmtFromExpressions(m, elseBranch, env, locks, stmts);
+	<stmts, potentialIf, envIf, exsIf> = gatherStmtFromExpressions(m, ifB, env, locks, stmts);				
+	<stmts, potentialElse, envElse, exsElse> = gatherStmtFromExpressions(m, elseB, env, locks, stmts);
 
 	env = updateEnvironment(env,envIf);
 	env = mergeNestedEnvironment(env,envElse);
