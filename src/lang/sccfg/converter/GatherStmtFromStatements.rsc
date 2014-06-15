@@ -20,7 +20,7 @@ import lang::sccfg::converter::Java2DFG;
 tuple[set[Stmt], map[loc,set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\block(sB), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	envInner = env;
 	exs = ();
-	fenv = flowEnvironment((),());
+	fenv = emptyFlowEnvironment();
 	for(stmt <- sB){
 		<stmts, envInner, fenvS, exs> = gatherStmtFromStatements(m, stmt, envInner, locks, stmts);
 		fenv = mergeFlow(fenv, fenvS);
@@ -260,28 +260,29 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 
 //\try(Statement body, list[Statement] catchClauses, Statement \finally)  
 tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\try(body, catchStatements, fin), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
-	<stmts, envTry, fenv, exs> = gatherStmtFromStatements(m, body, env, locks, stmts);
+	<stmts, envTry, fenv, exsInner> = gatherStmtFromStatements(m, body, env, locks, stmts);
 	env = updateEnvironment(env, envTry);	
 	exitEnv = env;
+	exs = ();
 	
 	for(cs <- catchStatements){
-		<stmts, envC, fenvC, exsC> = gatherStmtFromCatchStatements(m, cs, env, locks, stmts);	
+		<stmts, envC, fenvC, exsC> = gatherStmtFromCatchStatements(m, catchStatements, env, locks, exsInner, stmts);	
 		exs = mergeExceptions(exs,exsC);
 		fenv = mergeFlow(fenv, fenvC);
 		exitEnv = mergeNestedEnvironment(exitEnv, envC);
 	}
 	//Run finally for every environemnt
 	//exit
-	<stmts, exitEnv, fenvE, exsE> = gatherStmtFromCatchStatements(m, cs, exitEnv, locks, stmts);
+	<stmts, exitEnv, fenvE, exsE> = gatherStmtFromStatements(m, fin, exitEnv, locks, stmts);
 	exs = mergeExceptions(exs,exsE);
 	//continue
-	<stmts, envC, _, _> = gatherStmtFromCatchStatements(m, cs, getContinueEnvironment(fenv), locks, stmts);
+	<stmts, envC, _, _> = gatherStmtFromStatements(m, fin, getContinueEnvironment(fenv), locks, stmts);
 	fenv = updateContinue(fenv, envC);
 	//break
-	<stmts, envB, _, _> = gatherStmtFromCatchStatements(m, cs, getBreakEnvironment(fenv), locks, stmts);
+	<stmts, envB, _, _> = gatherStmtFromStatements(m, fin, getBreakEnvironment(fenv), locks, stmts);
 	fenv = updateContinue(fenv, envB);
 	//return
-	<stmts, envR, _, _> = gatherStmtFromCatchStatements(m, cs, getReturnEnvironment(fenv), locks, stmts);
+	<stmts, envR, _, _> = gatherStmtFromStatements(m, fin, getReturnEnvironment(fenv), locks, stmts);
 	fenv = updateReturn(fenv, envR);
 	return <stmts, exitEnv, fenv, exs>;
 }

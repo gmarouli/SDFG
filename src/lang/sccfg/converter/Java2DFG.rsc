@@ -86,10 +86,10 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 	for (m:Declaration::method(_, _, parameters, ex, b) <- allMethods) {
 		
 		//determine lock
-		rel[loc,loc] locks = {};
+		lrel[loc,loc] locks = [];
 		for(Decl::method(id, _, l) <- decls){
 			if(id.path == m@decl.path)
-				locks += {<m@src, l>};
+				locks += [<m@src, l>];
 		} 
 		//set up environment with parameters and fields
 		map[loc, set[loc]] env = ( p@decl : {p@src} | p <- parameters) + ( field : {emptyId} | field <- fieldsPerClass[extractClassName(m@decl)] ? {}) + ( field : {emptyId} | sc <- inheritingClasses[extractClassName(m@decl)] ? {}, field <- fieldsPerClass[sc] ? {});
@@ -97,7 +97,7 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		
 		top-down-break visit(b) {
 			case Expression e : <methodStmts, _, env, _> = gatherStmtFromExpressions(m, e, env, locks, methodStmts);
-			case Statement s : <methodStmts, env, _, _> = gatherStmtFromStatements(m, s, env, FlowEnvironment::flowEnvironment((),()), locks, methodStmts);
+			case Statement s : <methodStmts, env, _, _> = gatherStmtFromStatements(m, s, env, locks, methodStmts);
 		}
 		
 		result+= methodStmts;
@@ -109,13 +109,13 @@ public str extractClassName(loc method)
 	= substring(method.path,0,findLast(method.path,"/"));
 	
 loc getIdFromStmt(Stmt::read(id, _, _)) = id;
-loc getIdFromStmt(Stmt::create(id, _, _, _)) = id;
+loc getIdFromStmt(Stmt::create(id, _, _)) = id;
 loc getIdFromStmt(Stmt::assign(id, _, _)) = id;
 loc getIdFromStmt(Stmt::call(id, _, _, _)) = id;
 loc getIdFromStmt(Stmt::lock(id, _, _)) = id;
 
 loc getVarFromStmt(Stmt::read(_, var, _)) = var;
-loc getVarFromStmt(Stmt::create(_, var, _, _)) = var;
+loc getVarFromStmt(Stmt::create(_, var, _)) = var;
 loc getVarFromStmt(Stmt::assign(_, var, _)) = var;
 loc getVarFromStmt(Stmt::call(_, var, _, _)) = var;
 loc getVarFromStmt(Stmt::lock(_, var, _)) = var;

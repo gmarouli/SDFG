@@ -161,11 +161,11 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gath
 
 //method(bool isSuper, Expression receiver, str name, list[Expression] arguments)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:methodCall(isSuper, receiver, name, args), map[loc,set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
-	potential = {};
-	exs = ();
+	set[Stmt] potential = {};
+	map[str, map[loc,set[loc]]] exs = ();
 	for(arg <- args){
 		<stmts, potential, env, exsC> = gatherStmtFromExpressions(m, arg, env, locks, stmts);
-		exs = merge(exs,exsC);
+		exs = mergeExceptions(exs,exsC);
 	}
 	stmts = addAndLock(potential + {Stmt::call(e@src, receiver@decl, e@decl, arg) | arg <- getDependencyIds(potential)}, locks, stmts);
 	
