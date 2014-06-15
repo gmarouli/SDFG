@@ -14,7 +14,21 @@ import lang::sccfg::converter::GatherStmtFromExpressions;
 import lang::sccfg::converter::Java2DFG;
 
 //assert(Expression expression)
+tuple[set[Stmt], map[loc,set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\assert(exp), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
+	return gatherStmtFromStatements(m, \assert(exp, Expression::null()), env, locks, stmts);
+}
+
 //assert(Expression expression, Expression message)
+tuple[set[Stmt], map[loc,set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\assert(exp, message), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
+	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, exp, env, locks, stmts);
+	addAndLock(potential, locks, stmts);
+	
+	<stmts, potential, envM, exsM> = gatherStmtFromExpressions(m, message, env, locks, stmts);
+	addAndLock(potential, locks, stmts);
+	exs = mergeExceptions(exs, exsM);
+	//The assert is a possible an exit point, in case of finally we can see it as a return
+	return <stmts, mergeNestedEnvironment(env,envM), initializeReturnEnv(env), exs>;
+}
 
 //block(list[Statement] statements)
 tuple[set[Stmt], map[loc,set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\block(sB), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
@@ -327,22 +341,38 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 
 
 //\while(Expression condition, Statement body)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\while(cond, body), map[loc, set[loc]] env, rel[loc, loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\while(cond, body), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	return dealWithLoopsConditionFirst(m, [], cond, [], body, env, locks, stmts);
 }
 
 //\expressionStatement(Expression stmt)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:expressionStatement(e), map[loc, set[loc]] env, rel[loc, loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:expressionStatement(e), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, _, env, exs> = gatherStmtFromExpressions(m, e, env, locks, stmts);
 	return <stmts, env, emptyFlowEnvironment(), exs>;
 }
 
  //\constructorCall(bool isSuper, Expression expr, list[Expression] arguments)
+ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:constructorCall(isSuper, exp, args), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
+ 	exs = ();
+	for(arg <- args){
+		<stmts, potential, env, exsC> = gatherStmtFromExpressions(m, arg, env, locks, stmts);
+		stmts = addAndLock(potential, locks, stmts);
+		exs = mergeExceptions(exs,exsC);
+	}
+	
+	<stmts, potential, env, exsC> = gatherStmtFromExpressions(m, exp, env, locks, stmts);
+	exs = mergeExceptions(exs,exsC);
+	stmts = addAndLock(potential, locks, stmts);
+		
+	return <stmts, env, emptyFlowEnvironment(), exs>;
+}
  //\constructorCall(bool isSuper, list[Expression] arguments)
+ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:constructorCall(isSuper, args), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
+	 return gatherStmtFromStatements(m, constructorCall(isSuper, Expression::null(), args), env, locks, stmts);
+ }
 
 
-
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement b, map[loc, set[loc]] env, rel[loc, loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement b, map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	println("case I do not need : <b>");
 	return <stmts, env, emptyFlowEnvironment(), ()>;
 }
