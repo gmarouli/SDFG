@@ -27,7 +27,7 @@ tuple[set[Stmt], map[loc,set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]
 	addAndLock(potential, locks, stmts);
 	exs = mergeExceptions(exs, exsM);
 	//The assert is a possible an exit point, in case of finally we can see it as a return
-	return <stmts, mergeNestedEnvironment(env,envM), initializeReturnEnv(env), exs>;
+	return <stmts, mergeNestedEnvironment(env,envM), initializeReturnEnvironment(env), exs>;
 }
 
 //block(list[Statement] statements)
@@ -45,30 +45,30 @@ tuple[set[Stmt], map[loc,set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]
 
 //break()
 tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\break(), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
-	return <stmts, env, initializeBreakEnv(env), ()>;
+	return <stmts, env, initializeBreakEnvironment(env), ()>;
 }
 
 //break("")
 tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\break(""), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	// ISSUE: what if break is not in a branch? then it is perceived partly as a continue
-	return <stmts, env, initializeBreakEnv(env), ()>;
+	return <stmts, env, initializeBreakEnvironment(env), ()>;
 }
 
 //break(str label)
 tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\break(_), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	assert false : "Labeled statement (break) found!!!";
-	return <stmts, env, initializeBreakEnv(env), ()>;
+	return <stmts, env, initializeBreakEnvironment(env), ()>;
 }
 
 //continue()
 tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\continue(), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
-	return <stmts, env, initializeContinueEnv(env), ()>;
+	return <stmts, env, initializeContinueEnvironment(env), ()>;
 }
 
 //continue(str label)
 tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\continue(_), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	assert false : "Labeled statement (continue) found!!!";
-	return <stmts, env, initializeContinueEnv(env), ()>;
+	return <stmts, env, initializeContinueEnvironment(env), ()>;
 }
 
 //do(Statement body, Expression condition)
