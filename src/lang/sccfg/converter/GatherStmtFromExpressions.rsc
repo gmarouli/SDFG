@@ -38,6 +38,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gath
 	<stmts, potential2, env, exsC> = gatherStmtFromExpressions(m, init, env, locks, stmts);
 	exs = mergeExceptions(exs,exsC);
 	potential = potential1 + potential2;
+	println(potential);
 	stmts = addAndLock(potential, locks, stmts);
 		
 	loc con = |java+constructor:///array|;
@@ -55,9 +56,9 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gath
 	potential = {};
 	exs = ();
 	for(el <- elements){
-		<stmts, potential, env, exsC> = gatherStmtFromExpressions(m, el, env, locks, stmts);
-		exs = mergeExceptionexs = mergeExceptions;
-		stmts = addAndLock(potential, locks, stmts);
+		<stmts, potentialC, env, exsC> = gatherStmtFromExpressions(m, el, env, locks, stmts);
+		exs = mergeExceptions(exs, exsC);
+		potential += potentialC;
 	}
 	return <stmts, potential, env, exs>;
 }
