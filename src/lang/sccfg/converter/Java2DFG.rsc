@@ -120,4 +120,10 @@ loc getVarFromStmt(Stmt::assign(_, var, _)) = var;
 loc getVarFromStmt(Stmt::call(_, var, _, _)) = var;
 loc getVarFromStmt(Stmt::lock(_, var, _)) = var;
 
+loc getDependencyFromStmt(Stmt::read(_, _, d)) = d;
+loc getDependencyFromStmt(Stmt::create(_, _, p)) = p;
+loc getDependencyFromStmt(Stmt::assign(_, _, r)) = r;
+loc getDependencyFromStmt(Stmt::call(_, _, _, p)) = p;
+loc getDependencyFromStmt(Stmt::lock(_, _, s)) = s;
+
 private loc getDeclFromRead(Stmt::read(_,decl,_)) = decl;
