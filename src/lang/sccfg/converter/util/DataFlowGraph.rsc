@@ -20,7 +20,8 @@ DFG buildGraph(Program p)
 
 	 
 DFG buildDataDependencies(Program p)
-	 = { <access(getIdFromStmt(stmt)), access(getDependencyFromStmt(stmt))> | stmt <- p.statements, isDataAccess(stmt)}
+	//missing connection call with receiver
+	 = { <access(getIdFromStmt(stmt)), access(getDependencyFromStmt(stmt))> | stmt <- p.statements, isDataAccess(stmt), bprintln(stmt)}
 	;
 	
 DFG buildSynchronizedDependencies(Program p)
@@ -30,10 +31,9 @@ DFG buildSynchronizedDependencies(Program p)
 	
 //DFG buildVolatileDependencies(Program p, DFG g)
 //	//acquire dependency from volatile
-//	 = { <stmt, GraphNode::lock(address, volVar)> | attribute(volVar, true) <- p.decls, <stmt,access(address, varRead)> <- g, read(id, variable,_) <- p.statements, id == address, volVar == varRead}
+//	 = { <address, GraphNode::lock(address, volVar)> | attribute(volVar, true) <- p.decls, <stmt,access(address, varRead)> <- g, read(id, variable,_) <- p.statements, id == address, volVar == varRead}
 //	 //release dependency from volatile
 //	 + { <GraphNode::lock(address, volVar), stmt> | attribute(volVar, true) <- p.decls, <access(address, varAssign), stmt> <- g, assign(id, variable,_) <- p.statements, id == address, volVar == varAssign}
-//	 
 //	;
 		
 bool isDataAccess(Stmt s:lock(_,_,_)) = false;

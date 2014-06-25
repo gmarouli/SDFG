@@ -38,7 +38,6 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gath
 	<stmts, potential2, env, exsC> = gatherStmtFromExpressions(m, init, env, locks, stmts);
 	exs = mergeExceptions(exs,exsC);
 	potential = potential1 + potential2;
-	println(potential);
 	stmts = addAndLock(potential, locks, stmts);
 		
 	loc con = |java+constructor:///array|;
@@ -172,6 +171,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gath
 		<stmts, potential, env, exsC> = gatherStmtFromExpressions(m, arg, env, locks, stmts);
 		exs = mergeExceptions(exs,exsC);
 	}
+	println(e);
 	stmts = addAndLock(potential + {Stmt::call(e@src, receiver@decl, e@decl, arg) | arg <- getDependencyIds(potential)}, locks, stmts);
 	
 	for(ex <- exceptions[e@decl] ? {}){
@@ -274,6 +274,11 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gath
 //simpleName(str name)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:simpleName(name), map[loc,set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	potential = {Stmt::read(e@src, e@decl, writtenBy) | writtenBy <- env[e@decl] ? {emptyId}};	
+	return <stmts, potential, env, ()>;
+}
+
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:\type(simpleType(name)), map[loc,set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
+	potential = {Stmt::read(e@src, name@decl+".class", emptyId)};	
 	return <stmts, potential, env, ()>;
 }
 

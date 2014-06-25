@@ -21,10 +21,10 @@ tuple[set[Stmt], map[loc,set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]
 //assert(Expression expression, Expression message)
 tuple[set[Stmt], map[loc,set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\assert(exp, message), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, exp, env, locks, stmts);
-	addAndLock(potential, locks, stmts);
+	stmts = addAndLock(potential, locks, stmts);
 	
 	<stmts, potential, envM, exsM> = gatherStmtFromExpressions(m, message, env, locks, stmts);
-	addAndLock(potential, locks, stmts);
+	stmts = addAndLock(potential, locks, stmts);
 	exs = mergeExceptions(exs, exsM);
 	//The assert is a possible an exit point, in case of finally we can see it as a return
 	env = mergeNestedEnvironment(env,envM);
@@ -98,7 +98,7 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\foreach(parameter, collection, body), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	outerEnv = env;
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, collection, env, locks, stmts);
-	addAndLock(potential + {Stmt::assign(s@src, parameter@decl, s@src)}, locks, stmts);
+	stmts = addAndLock(potential + {Stmt::assign(s@src, parameter@decl, s@src)}, locks, stmts);
 	env[parameter@decl] = {s@src};
 	
 	outerEnv = updateEnvironment(outerEnv, env);
@@ -111,7 +111,7 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 			
 	//running the condition after one loop getting all the connections from statements and continue command
 	<stmts, potential, env, _> = gatherStmtFromExpressions(m, collection, env, locks, stmts);
-	addAndLock(potential, locks, stmts);
+	stmts = addAndLock(potential, locks, stmts);
 	
 	//connect the statements with the condition but the environment and exception are already found
 	<stmts, env, _, _> = gatherStmtFromStatements(m, b, env, locks, stmts);
@@ -140,8 +140,7 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 //if(Expression condition, Statement thenB)
 tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\if(cond, thenB), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, cond, env, locks, stmts);
-	addAndLock(potential, locks, stmts);
-	
+	stmts = addAndLock(potential, locks, stmts);
 	<stmts, envOpt, fenv, exsC> = gatherStmtFromStatements(m, thenB, env, locks, stmts);
 	exs = mergeExceptions(exs,exsC);			
 
@@ -152,7 +151,7 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 //if(Expression condition, Statement thenB, Statement elseB)
 tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\if(cond, thenB, elseB), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, cond, env, locks, stmts);
-	addAndLock(potential, locks, stmts);
+	stmts = addAndLock(potential, locks, stmts);
 	<stmts, env, fenv, exsC> = branching(m, thenB, elseB, env, locks, stmts); 
 	return <stmts, env, fenv, merge(exs, exsC)>;
 }
@@ -178,7 +177,7 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 //switch(Expression exp, list[Statement] statements)
 tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\switch(exp, body), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, exp, env, locks, stmts);
-	addAndLock(potential, locks, stmts);
+	stmts = addAndLock(potential, locks, stmts);
 	
 	outerEnv = env;
 	exitEnv = ();
@@ -242,12 +241,11 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 }
 
 //synchronizedStatement(Expression lock, Statement body)
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:syncronizedStatement(l, body), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:synchronizedStatement(l, body), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, l, env, locks, stmts);
 	stmts = addAndLock(potential, locks, stmts);
-	
 	vlock = getDeclFromRead(getOneFrom(potential));	
-	<stmts, env, fenv, exsC> = gatherStmtFromStatements(m, b, env, [<s@src, vlock>] + locks, stmts); //order is important every lock is locked to the next ones
+	<stmts, env, fenv, exsC> = gatherStmtFromStatements(m, body, env, [<s@src, vlock>] + locks, stmts); //order is important every lock is locked to the next ones
 	exs = mergeExceptions(exs, exsC);
 	return <stmts, env, fenv, exsC>;
 }
@@ -343,7 +341,8 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 
 //\while(Expression condition, Statement body)
 tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement s:\while(cond, body), map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
-	return dealWithLoopsConditionFirst(m, [], cond, [], body, env, locks, stmts);
+	list[Expression] emptyList = [];
+	return dealWithLoopsConditionFirst(m, emptyList, cond, emptyList, body, env, locks, stmts);
 }
 
 //\expressionStatement(Expression stmt)
@@ -376,3 +375,5 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]
 	println("case I do not need : <b>");
 	return <stmts, env, emptyFlowEnvironment(), ()>;
 }
+
+loc getDeclFromRead(Stmt r:read(_, decl, _)) = decl;

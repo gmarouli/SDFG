@@ -32,7 +32,7 @@ tuple[set[Stmt], set[Stmt], map[loc, set[loc]], map[str, map[loc, set[loc]]]] sh
 }
 
 
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] dealWithLoopsConditionFirst(Declaration m, list[Expression] initializers, Expression cond, list[Expression] updaters, Statement body, map[loc, set[loc]] env, lrel[loc, loc] locks, set[loc] stmts){
+tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, map[str, map[loc, set[loc]]]] dealWithLoopsConditionFirst(Declaration m, list[Expression] initializers, Expression cond, list[Expression] updaters, Statement body, map[loc, set[loc]] env, lrel[loc, loc] locks, set[Stmt] stmts){
 	outerEnv = env;
 	exs = ();
 	for(i <- initializers){
