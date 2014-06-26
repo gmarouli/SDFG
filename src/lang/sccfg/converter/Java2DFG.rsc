@@ -7,6 +7,7 @@ import String;
 import lang::sccfg::ast::DataFlowLanguage;
 import lang::java::m3::TypeSymbol;
 import lang::java::jdt::m3::AST;
+import lang::sccfg::converter::util::DataFlowGraph;
 import lang::sccfg::converter::util::ContainersManagement;
 import lang::sccfg::converter::util::EnvironmentManagement;
 import lang::sccfg::converter::util::ControlFlowHelpers;
@@ -21,7 +22,9 @@ Program createDFG(set[Declaration] asts) {
 	println("Getting decls");
 	decls = getDeclarations(asts);
 	println("Getting stmts");
-	stmts = getStatements(asts,decls);
+	<stmts, g> = getStatements(asts,decls);
+	iprintToFile(|file:///D:/object_flow_thesisspace/University/OFG/Student.graph|, g);
+	iprintln(g);
 	return program(decls, stmts);
 }
 
@@ -52,7 +55,7 @@ private loc determineLock(Declaration method){
 private map[str, list[Statement]] gatherInitializations(set[Declaration] asts) 
 	= (c@decl.path : [expressionStatement(v) | field(t,frags) <- b, v <- frags] | /c:class(name, _, _, b) <- asts);
 
-set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
+tuple[set[Stmt], DFG] getStatements(set[Declaration] asts, set[Decl] decls) {
 
 	initialized = gatherInitializations(asts);
 	fieldsPerClass = (c@decl.path : {v@decl | field(t,frags) <- b, v <- frags}| /c:class(name, _, _, b) <- asts);
@@ -78,6 +81,9 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 	};
 	
 	set[Stmt] result = {};
+	DFG g = {};
+	set[loc] volatileFields = {vField | attribute(vField, true) <- decls};
+	println(volatileFields);
 	for (m:Declaration::method(_, _, _, ex, _) <- allMethods) {
 		if(ex != []){
 			exceptions[m@decl] = {e@decl.path | e <- ex};
@@ -94,36 +100,17 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		//set up environment with parameters and fields
 		map[loc, set[loc]] env = ( p@decl : {p@src} | p <- parameters) + ( field : {emptyId} | field <- fieldsPerClass[extractClassName(m@decl)] ? {}) + ( field : {emptyId} | sc <- inheritingClasses[extractClassName(m@decl)] ? {}, field <- fieldsPerClass[sc] ? {});
 		set[Stmt] methodStmts = {};
+		rel[loc,loc] acquireActions = {};
 		
 		top-down-break visit(b) {
-			case Expression e : <methodStmts, _, env, _> = gatherStmtFromExpressions(m, e, env, locks, methodStmts);
-			case Statement s : <methodStmts, env, _, _> = gatherStmtFromStatements(m, s, env, locks, methodStmts);
+			case Expression e : <methodStmts, _, env, acquireActions, _> = gatherStmtFromExpressions(m, e, env, volatileFields, acquireActions, methodStmts);
+			case Statement s : <methodStmts, env, _, acquireActions, _> = gatherStmtFromStatements(m, s, env, volatileFields, acquireActions, methodStmts);
 		}
-		
+		g += buildGraph(methodStmts);
 		result+= methodStmts;
 	}	
-	return result;
+	return <result,g>;
 }
 
 public str extractClassName(loc method) 
 	= substring(method.path,0,findLast(method.path,"/"));
-	
-loc getIdFromStmt(Stmt::read(id, _, _)) = id;
-loc getIdFromStmt(Stmt::create(id, _, _)) = id;
-loc getIdFromStmt(Stmt::assign(id, _, _)) = id;
-loc getIdFromStmt(Stmt::call(id, _, _, _)) = id;
-loc getIdFromStmt(Stmt::lock(id, _, _)) = id;
-
-loc getVarFromStmt(Stmt::read(_, var, _)) = var;
-loc getVarFromStmt(Stmt::create(_, var, _)) = var;
-loc getVarFromStmt(Stmt::assign(_, var, _)) = var;
-loc getVarFromStmt(Stmt::call(_, var, _, _)) = var;
-loc getVarFromStmt(Stmt::lock(_, var, _)) = var;
-
-loc getDependencyFromStmt(Stmt::read(_, _, d)) = d;
-loc getDependencyFromStmt(Stmt::create(_, _, p)) = p;
-loc getDependencyFromStmt(Stmt::assign(_, _, r)) = r;
-loc getDependencyFromStmt(Stmt::call(_, _, _, p)) = p;
-loc getDependencyFromStmt(Stmt::lock(_, _, s)) = s;
-
-private loc getDeclFromRead(Stmt::read(_,decl,_)) = decl;
