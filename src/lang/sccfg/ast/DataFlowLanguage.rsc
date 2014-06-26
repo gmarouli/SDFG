@@ -17,4 +17,5 @@ data Stmt
 	| assign(loc id, loc target, loc dependsOn)
 	| call(loc id, loc receiver, loc method, loc parameter)
 	| lock(loc id, loc lock, loc id)
+	| unlock(loc id, loc lock, loc id)
 	;
