@@ -41,7 +41,7 @@ private loc getDeclFromRead(Stmt::read(_,decl,_)) = decl;
 set[Stmt] getSynchronizationActions(Program p)
 	= {s | s <- p.statements, !isDataAccess(s)};
 	
-set[Stmt] removeAllSynchronizationEdgesOf(set[Stmt] stmts, loc var){
+set[Stmt] removeAllSynchronizationEdgesOfWithTheSameId(set[Stmt] stmts, loc var){
 	loc src;
 	for(stmt <- stmts){
 		if(var == getVarFromStmt(stmt)){
