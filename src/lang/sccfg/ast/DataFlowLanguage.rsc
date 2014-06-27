@@ -13,10 +13,8 @@ data Decl
 
 data Stmt
 	= read(loc id, loc variable, loc writtenBy)
-	| volatileRead(loc id, loc variable, loc writtenBy)
 	| create(loc id, loc constructor, loc actualParameters)
 	| assign(loc id, loc target, loc dependsOn)
-	| volatileAssign(loc id, loc target, loc dependsOn)
 	| call(loc id, loc receiver, loc method, loc parameter)
 	| acquireLock(loc id, loc lock, loc id)
 	| releaseLock(loc id, loc lock, loc id)

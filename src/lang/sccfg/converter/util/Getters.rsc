@@ -38,3 +38,17 @@ loc getDependencyFromStmt(Stmt::acquireLock(_, _, s)) = s;
 
 private loc getDeclFromRead(Stmt::read(_,decl,_)) = decl;
 
+set[Stmt] getSynchronizationActions(Program p)
+	= {s | s <- p.statements, !isDataAccess(s)};
+	
+set[Stmt] removeAllSynchronizationEdgesOf(set[Stmt] stmts, loc var){
+	loc src;
+	for(stmt <- stmts){
+		if(var == getVarFromStmt(stmt)){
+			src = getIdFromStmt(stmt);
+			break;
+		}
+	}
+	return { stmt | stmt <- stmts, src != getIdFromStmt(stmt), src != getDependencyFromStmt(stmt)};
+	
+}

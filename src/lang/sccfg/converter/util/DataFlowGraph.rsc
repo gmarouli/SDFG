@@ -8,6 +8,7 @@ import Set;
 import Relation;
 
 public data GraphNode = access(loc address)
+           			  | access(loc address, loc variable)
 					  | lock(loc address, loc variable);
 alias DFG = rel[GraphNode from, GraphNode to];
 
@@ -19,7 +20,7 @@ DFG buildGraph(set[Stmt] stmts)
 	 
 DFG buildDataDependencies(set[Stmt] stmts)
 	//missing connection call with receiver
-	 = { <access(getIdFromStmt(stmt)), access(getDependencyFromStmt(stmt))> | stmt <- stmts, isDataAccess(stmt)}
+	 = { <access(getIdFromStmt(stmt), getVarFromStmt(stmt)), access(getDependencyFromStmt(stmt))> | stmt <- stmts, isDataAccess(stmt)}
 	;
 	
 DFG buildSynchronizedDependencies(set[Stmt] stmts)

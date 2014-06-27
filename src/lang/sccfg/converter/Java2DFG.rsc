@@ -14,18 +14,17 @@ import lang::sccfg::converter::util::ControlFlowHelpers;
 import lang::sccfg::converter::GatherStmtFromExpressions;
 import lang::sccfg::converter::GatherStmtFromStatements;
 
-Program createDFG(loc project) = createDFG(createAstsFromEclipseProject(project, true));
+tuple[Program, DFG] createDFG(loc project) = createDFG(createAstsFromEclipseProject(project, true));
 
 public map[loc, set[str]] exceptions = ();
 
-Program createDFG(set[Declaration] asts) {
+tuple[Program, DFG] createDFG(set[Declaration] asts) {
 	println("Getting decls");
 	decls = getDeclarations(asts);
 	println("Getting stmts");
 	<stmts, g> = getStatements(asts,decls);
 	iprintToFile(|file:///D:/object_flow_thesisspace/University/OFG/Student.graph|, g);
-	iprintln(g);
-	return program(decls, stmts);
+	return <program(decls, stmts),g>;
 }
 
 set[Decl] getDeclarations(set[Declaration] asts) 

@@ -265,11 +265,12 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, rel[loc,loc],  map[str, ma
 	stmts += potential;
 	acquireActions += extractAcquireActions(potential, volatileFields);
 	
-	vlock = getDeclFromRead(getOneFrom(potential));	
+	vlock = getDeclFromRead(getOneFrom(potential));
+	//stmts += addAndLock({monitorEnter(s@src, vlock)}, acquireActions);	
 	
-	<stmts, env, fenv, acquireActions, exsC> = gatherStmtFromStatements(m, body, env, volatileFields, [<s@src, vlock>] + acquireActions, stmts); //order is important every lock is locked to the next ones
+	<stmts, env, fenv, acquireActions, exsC> = gatherStmtFromStatements(m, body, env, volatileFields, {<s@src, vlock>} + acquireActions, stmts); //order is important every lock is locked to the next ones
 	
-	stmts += addAndUnlock(stmts, s@src, vlock);//release
+	stmts += addAndUnlock(stmts, s@src, vlock);// + addAndLock({monitorExit(s@src, vlock)}, acquireActions);//release
 	exs = mergeExceptions(exs, exsC);
 	return <stmts, env, fenv, acquireActions, exsC>;
 }

@@ -95,7 +95,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,se
 	<assigned,_> = takeOneFrom(potentialWrites);
 	var = getVarFromStmt(assigned);
 	if(var in volatileFields) 
-		stmts += addAndUnlock(stmts, var, lhs@decl);
+		stmts += addAndUnlock(stmts, lhs@src, var);
 	stmts += addAndLock({Stmt::assign(e@src, var, id) | id <- getDependencyIds(potentialReads)}, acquireActions);
 	env[var] = {e@src};
 	potential = addAndLock({Stmt::read(lhs@src, var, e@src)}, acquireActions);
@@ -134,7 +134,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,se
 	}
 	
 	loc con = |java+constructor:///|;
-	con.path = e@decl.path ? emptyId;
+	con.path = e@decl.path ? "";
 	potential = addAndLock({create(e@src, con, id) | id <- getDependencyIds(potential)}, acquireActions);
 
 	return <stmts, potential, env, acquireActions, exs>;
@@ -362,8 +362,8 @@ set[loc] getDependencyIds(set[Stmt] potential){
 set[Stmt] addAndLock(set[Stmt] newStmts, rel[loc,loc] acquireActions)
 	= newStmts + {Stmt::acquireLock(idL, l, getIdFromStmt(s)) | s <- newStmts, <idL, l> <- acquireActions};
 
-set[Stmt] addAndUnlock(set[Stmt] newStmts, loc idL, l)
-	= newStmts + {Stmt::releaseLock(idL, l, getIdFromStmt(s)) | s <- newStmts};
-
+set[Stmt] addAndUnlock(set[Stmt] newStmts, loc idL, l){
+	return newStmts + {Stmt::releaseLock(idL, l, getIdFromStmt(s)) | s <- newStmts};
+}
 rel[loc, loc] extractAcquireActions(set[Stmt] potential, set[loc] volFields)
 	= { <id, var> |  read(id, var, _) <- potential, var in volFields};
