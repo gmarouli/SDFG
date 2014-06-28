@@ -91,9 +91,10 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,se
 		
 		<stmts, potentialWrites, env, acquireActions, exsRhs> = gatherStmtFromExpressions(m, lhs, env, volatileFields, acquireActions, stmts);
 	}
-	
-	<assigned,_> = takeOneFrom(potentialWrites);
-	var = getVarFromStmt(assigned);
+	loc var;
+	for(w:read(_, name, _) <- potentialWrites){
+		var = name;
+	}
 	if(var in volatileFields) 
 		stmts += addAndUnlock(stmts, lhs@src, var);
 	stmts += addAndLock({Stmt::assign(e@src, var, id) | id <- getDependencyIds(potentialReads)}, acquireActions);

@@ -265,7 +265,10 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, rel[loc,loc],  map[str, ma
 	stmts += potential;
 	acquireActions += extractAcquireActions(potential, volatileFields);
 	
-	vlock = getDeclFromRead(getOneFrom(potential));
+	loc vlock;
+	for(w:read(_, name, _) <- potential){
+		vlock = name;
+	}
 	//stmts += addAndLock({monitorEnter(s@src, vlock)}, acquireActions);	
 	
 	<stmts, env, fenv, acquireActions, exsC> = gatherStmtFromStatements(m, body, env, volatileFields, {<s@src, vlock>} + acquireActions, stmts); //order is important every lock is locked to the next ones
@@ -402,8 +405,9 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, rel[loc,loc],  map[str, ma
  }
 
 
-tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, rel[loc,loc], map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement b, map[loc, set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
-	println("case I do not need : <b>");
+default tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, rel[loc,loc], map[str, map[loc, set[loc]]]] gatherStmtFromStatements(Declaration m, Statement b, map[loc, set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
+	if(!(b:=empty()))
+		println("case I do not need : <b>");
 	return <stmts, env, emptyFlowEnvironment(), acquireActions, ()>;
 }
 

@@ -82,7 +82,7 @@ tuple[set[Stmt], DFG] getStatements(set[Declaration] asts, set[Decl] decls) {
 	set[Stmt] result = {};
 	DFG g = {};
 	set[loc] volatileFields = {vField | attribute(vField, true) <- decls};
-	println(volatileFields);
+
 	for (m:Declaration::method(_, _, _, ex, _) <- allMethods) {
 		if(ex != []){
 			exceptions[m@decl] = {e@decl.path | e <- ex};
