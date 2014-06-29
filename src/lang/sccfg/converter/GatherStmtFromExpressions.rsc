@@ -7,6 +7,7 @@ import String;
 import lang::sccfg::ast::DataFlowLanguage;
 import lang::java::m3::TypeSymbol;
 import lang::java::jdt::m3::AST;
+import lang::sccfg::converter::Java2DFG;
 import lang::sccfg::converter::util::Getters;
 import lang::sccfg::converter::util::ControlFlowHelpers;
 import lang::sccfg::converter::util::ContainersManagement;
@@ -198,19 +199,25 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,se
 
 //methodCall(bool isSuper, str name, list[Expression] arguments)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:methodCall(isSuper,name,args), map[loc,set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
-	return gatherStmtFromExpressions(m, methodCall(isSuper, \this(), name, args)[@src = e@src][@typ = e@typ], env, volatileFields, acquireActions, stmts);
+	return gatherStmtFromExpressions(m, methodCall(isSuper, \this(), name, args)[@typ = m@typ][@src = m@src][@decl = m@decl], env, volatileFields, acquireActions, stmts);
 }
 
 //method(bool isSuper, Expression receiver, str name, list[Expression] arguments)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:methodCall(isSuper, receiver, name, args), map[loc,set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
 	map[str, map[loc,set[loc]]] exs = ();
+	potential = {};
 	for(arg <- args){
 		<stmts, potential, env, acquireActions, exsC> = gatherStmtFromExpressions(m, arg, env, volatileFields, acquireActions, stmts);
 		stmts += potential;
-		acquireActions += extractAcquireActions(potential);
+		acquireActions += extractAcquireActions(potential, volatileFields);
 		exs = mergeExceptions(exs,exsC);
 	}
-	stmts += addAndLock({Stmt::call(e@src, receiver@decl, e@decl, arg) | arg <- getDependencyIds(potential)}, acquireActions);
+	loc recDecl;
+	if(receiver := this())
+		recDecl = |java+class:///|+extractClassName(m@decl)+"/this";
+	else
+		recDecl = receiver@decl;
+	stmts += addAndLock({Stmt::call(e@src, recDecl, e@decl, arg) | arg <- getDependencyIds(potential)}, acquireActions);
 	
 	for(ex <- exceptions[e@decl] ? {}){
 		if(ex in exs){
@@ -262,7 +269,14 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,se
 
 //declarationExpression(Declaration d)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:declarationExpression(d), map[loc,set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
-	<stmts, env, _, acquireActions, exs> = gatherStmtFromStatements(m, declarationStatement(d), env, volatileFields, acquireActions, stmts); 
+	exs = ();
+	fenv = emptyFlowEnvironment();
+	top-down-break visit(d) {
+		case Expression exp : {
+			<stmts, _, env, acquireActions, exsE> = gatherStmtFromExpressions(m, exp, env, volatileFields, acquireActions, stmts);
+			exs = mergeExceptions(exs, exsE);
+		}
+	}
 	return <stmts, {}, env, acquireActions, exs>;
 }
 
@@ -279,7 +293,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,se
 			<stmts, potential, env, acquireActions, exsOp> = gatherStmtFromExpressions(m, op, env, volatileFields, acquireActions, stmts);
 			stmts += potential;
 			dependencies += potential;
-			acquireActions += extractAcquireActions(potential);
+			acquireActions += extractAcquireActions(potential, volatileFields);
 			exs = mergeExceptions(exs,exsOp);
 		}
 		//the reads are not potential because there are operations done one them that cannot be statements!
@@ -290,7 +304,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,se
 //postfix(Expression operand, str operator)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:postfix(operand, operator), map[loc,set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
 	if(operator == "++" || operator == "--"){
-		<stmts, potential, env, exs> = gatherStmtFromExpressions(m, operand, env, stmts);
+		<stmts, potential, env, acquireActions, exs> = gatherStmtFromExpressions(m, operand, env,  volatileFields, acquireActions, stmts);
 		stmts += potential;
 		acquireActions += extractAcquireActions(potential, volatileFields);
 		
