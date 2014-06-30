@@ -12,25 +12,26 @@ AcquireActionsPaths emptyAcquireActionsPaths() = acquireActionsPaths((), {}, {},
 //Continue
 rel[loc,loc] getAcquireActionsFromContinue(acquireActionsPaths(_, acqAc, _, _)) = acqAc;
 
-AcquireActionsPaths addAcquireActionsFromContinue(AcquireActionsPaths a:acquireActionsPaths(exs, acqAcCont, acqAcBr, acqAcRet), rel[loc,loc] newActions) 
-	= acquireActionsPaths(exs, acqAcCont + newActions, acqAcBr, acqAcRet);
+AcquireActionsPaths initializeAcquireActionsFromContinue(rel[loc,loc] newActions) 
+	= acquireActionsPaths((), newActions, {}, {});
 
 //Break
 rel[loc,loc] getAcquireActionsFromBreak(acquireActionsPaths(_, _, acqAc, _)) = acqAc;
 
-AcquireActionsPaths addAcquireActionsFromBreak(AcquireActionsPaths a:acquireActionsPaths(exs, acqAcCont, acqAcBr, acqAcRet), rel[loc,loc] newActions) 
-	= acquireActionsPaths(exs, acqAcCont, acqAcBr + newActions, acqAcRet);
+AcquireActionsPaths initializeAcquireActionsFromBreak(rel[loc,loc] newActions) 
+	= acquireActionsPaths((), {}, newActions, {});
 
 //Return
 rel[loc,loc] getAcquireActionsFromReturn(acquireActionsPaths(_, _, _, acqAc)) = acqAc;
 
-AcquireActionsPaths addAcquireActionsFromReturn(AcquireActionsPaths a:acquireActionsPaths(exs, acqAcCont, acqAcBr, acqAcRet), rel[loc,loc] newActions) 
-	= acquireActionsPaths(exs, acqAcCont, acqAcBr, acqAcRet + newActions);
+AcquireActionsPaths initializeAcquireActionsFromReturn(rel[loc,loc] newActions) 
+	= acquireActionsPaths((), {}, {}, newActions);
 
 //Exceptions
-AcquireActionsPaths addAcquireActionsFromException(AcquireActionsPaths a:acquireActionsPaths(exs, acqAcCont, acqAcBr, acqAcRet), str name, rel[loc,loc] newActions){
-	exs[name] = (exs[name] ? {}) + newActions;
-	return acquireActionsPaths(exs, acqAcCont, acqAcBr, acqAcRet);
+AcquireActionsPaths initializeAcquireActionsFromException(rel[loc,loc] newActions){
+	map[str, rel[loc,loc]] exs = ();
+	exs[name] = newActions;
+	return acquireActionsPaths(exs, {}, {}, {});
 }
 
 rel[loc,loc] getAcquireActionsFromException(acquireActionsPaths(exs, _, _, _), str name) = exs[name] ? {};
