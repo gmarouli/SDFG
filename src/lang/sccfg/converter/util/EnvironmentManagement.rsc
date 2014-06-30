@@ -1,10 +1,5 @@
 module lang::sccfg::converter::util::EnvironmentManagement
 
-import IO;
-import lang::sccfg::ast::DataFlowLanguage;
-
-
-
 data FlowEnvironment = flowEnvironment(map[loc,set[loc]] continueEnv, map[loc,set[loc]] breakEnv, map[loc,set[loc]] retEnv);
 
 FlowEnvironment emptyFlowEnvironment() = flowEnvironment((), (), ());
@@ -61,18 +56,6 @@ FlowEnvironment updateBreak(flowEnvironment(envC, envB, envR), map[loc,set[loc]]
 
 FlowEnvironment updateReturn(flowEnvironment(envC, envB, envR), map[loc,set[loc]] env)
 	= flowEnvironment(envC, envB, updateEnvironment(envR, env)); 
-
-map[str, map[loc, set[loc]]] mergeExceptions(map[str, map[loc, set[loc]]] exs1, map[str, map[loc, set[loc]]] exs2){
-	for(ex <- exs2){
-		if(ex in exs1){
-			exs1[ex] = merge(exs1[ex], exs2[ex]);
-		}
-		else{
-			exs1[ex] = exs2[ex];
-		}
-	}
-	return exs1;
-}
 
 FlowEnvironment mergeBreak(flowEnvironment(contEnv, brEnv, retEnv), map[loc,set[loc]] current)
 	= flowEnvironment(contEnv, merge(brEnv, current), retEnv);
