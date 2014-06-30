@@ -14,8 +14,8 @@ loc getIdFromStmt(Stmt::assign(id, _, _)) = id;
 loc getIdFromStmt(Stmt::call(id, _, _, _)) = id;
 loc getIdFromStmt(Stmt::releaseLock(id, _, _)) = id;
 loc getIdFromStmt(Stmt::acquireLock(id, _, _)) = id;
-loc getIdFromStmt(Stmt::entryPoint(id, _, _)) = id;
-loc getIdFromStmt(Stmt::exitPoint(id, _, _)) = id;
+loc getIdFromStmt(Stmt::entryPoint(id, _)) = id;
+loc getIdFromStmt(Stmt::exitPoint(id, _)) = id;
 
 loc getDependencyFromStmt(Stmt::read(_, _, d)) = d;
 loc getDependencyFromStmt(Stmt::create(_, _, p)) = p;
@@ -23,8 +23,9 @@ loc getDependencyFromStmt(Stmt::assign(_, _, r)) = r;
 loc getDependencyFromStmt(Stmt::call(_, _, _, p)) = p;
 loc getDependencyFromStmt(Stmt::releaseLock(_, _, s)) = s;
 loc getDependencyFromStmt(Stmt::acquireLock(_, _, s)) = s;
-loc getDependencyFromStmt(Stmt::entryPoint(_, _)) = emptyId;
-loc getDependencyFromStmt(Stmt::exitPoint(_, _)) = emptyId;
+//the (1,1) is needed to exclude it from the new ids
+loc getDependencyFromStmt(Stmt::entryPoint(_, _)) = emptyId(1,1);
+loc getDependencyFromStmt(Stmt::exitPoint(_, _)) = emptyId(1,1);
 
 loc getDeclFromRead(Stmt::read(_,decl,_)) = decl;
 

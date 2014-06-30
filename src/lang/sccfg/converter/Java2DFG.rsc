@@ -14,17 +14,17 @@ import lang::sccfg::converter::util::ControlFlowHelpers;
 import lang::sccfg::converter::GatherStmtFromExpressions;
 import lang::sccfg::converter::GatherStmtFromStatements;
 
-tuple[Program, DFG] createDFG(loc project) = createDFG(createAstsFromEclipseProject(project, true));
+Program createDFG(loc project) = createDFG(createAstsFromEclipseProject(project, true));
 
 public map[loc, set[str]] exceptions = ();
 
-tuple[Program, DFG] createDFG(set[Declaration] asts) {
+Program createDFG(set[Declaration] asts) {
 	println("Getting decls");
 	decls = getDeclarations(asts);
 	println("Getting stmts");
-	<stmts, g> = getStatements(asts,decls);
-	iprintToFile(|file:///D:/object_flow_thesisspace/University/OFG/Student.graph|, g);
-	return <program(decls, stmts),g>;
+	stmts = getStatements(asts,decls);
+	iprintToFile(|file:///D:/object_flow_thesisspace/University/OFG/Student.ofg|, program(decls, stmts));
+	return program(decls, stmts);
 }
 
 set[Decl] getDeclarations(set[Declaration] asts) 
@@ -54,7 +54,7 @@ private loc determineLock(Declaration method){
 private map[str, list[Statement]] gatherInitializations(set[Declaration] asts) 
 	= (c@decl.path : [expressionStatement(v) | field(t,frags) <- b, v <- frags] | /c:class(name, _, _, b) <- asts);
 
-tuple[set[Stmt], DFG] getStatements(set[Declaration] asts, set[Decl] decls) {
+set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 
 	initialized = gatherInitializations(asts);
 	fieldsPerClass = (c@decl.path : {v@decl | field(t,frags) <- b, v <- frags}| /c:class(name, _, _, b) <- asts);
@@ -62,9 +62,9 @@ tuple[set[Stmt], DFG] getStatements(set[Declaration] asts, set[Decl] decls) {
 	
 	allMethods 
 		= [ m | /m:Declaration::method(_,_,_,_,_) <- asts]
-		+ [Declaration::method(t, n, p, e, empty())[@decl=m@decl] | /m:Declaration::method(Type t,n,p,e) <- asts]
-		+ [Declaration::method(simpleType(simpleName(n)), n, p, e, Statement::block((initialized[extractClassName(m@decl)] ? []) + b))[@decl=m@decl] | /m:Declaration::constructor(str n,p,e,  Statement::block(b)) <- asts]
-		+ [Declaration::method(simpleType(simpleName(n)), n, [], [], block(initialized[c@decl.path] ? []))[@decl=(c@decl)[scheme="java+constructor"] + "<n>()"] | /c:class(n, _, _, b) <- asts, !(Declaration::constructor(_, _, _, _) <- b)]
+		+ [Declaration::method(t, n, p, e, empty())[@decl=m@decl][@src = m@src] | /m:Declaration::method(Type t,n,p,e) <- asts]
+		+ [Declaration::method(simpleType(simpleName(n)), n, p, e, Statement::block((initialized[extractClassName(m@decl)] ? []) + b))[@decl=m@src][@decl=m@src] | /m:Declaration::constructor(str n,p,e,  Statement::block(b)) <- asts]
+		+ [Declaration::method(simpleType(simpleName(n)), n, [], [], block(initialized[c@decl.path] ? []))[@decl=(c@decl)[scheme="java+constructor"] + "<n>()"][@src = c@src] | /c:class(n, _, _, b) <- asts, !(Declaration::constructor(_, _, _, _) <- b)]
 	;
 
 	allMethods = fixCollections(allMethods);
@@ -98,17 +98,19 @@ tuple[set[Stmt], DFG] getStatements(set[Declaration] asts, set[Decl] decls) {
 		} 
 		//set up environment with parameters and fields
 		map[loc, set[loc]] env = ( p@decl : {p@src} | p <- parameters) + ( field : {emptyId} | field <- fieldsPerClass[extractClassName(m@decl)] ? {}) + ( field : {emptyId} | sc <- inheritingClasses[extractClassName(m@decl)] ? {}, field <- fieldsPerClass[sc] ? {});
-		set[Stmt] methodStmts = {};
+		set[Stmt] methodStmts = {entryPoint(m@src, m@decl)};
 		rel[loc,loc] acquireActions = {};
 		
 		top-down-break visit(b) {
 			case Expression e : <methodStmts, _, env, acquireActions, _> = gatherStmtFromExpressions(m, e, env, volatileFields, acquireActions, methodStmts);
 			case Statement s : <methodStmts, env, _, acquireActions, _> = gatherStmtFromStatements(m, s, env, volatileFields, acquireActions, methodStmts);
 		}
-		g += buildGraph(methodStmts);
+		exitSrc = m@src;
+		exitSrc.offset = m@src.offset + m@src.length -1;
+		methodStmts += {entryPoint(exitSrc, m@decl)};
 		result+= methodStmts;
 	}	
-	return <result,g>;
+	return result;
 }
 
 public str extractClassName(loc method) 
