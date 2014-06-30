@@ -16,6 +16,8 @@ data Stmt
 	| create(loc id, loc constructor, loc actualParameters)
 	| assign(loc id, loc target, loc dependsOn)
 	| call(loc id, loc receiver, loc method, loc parameter)
-	| acquireLock(loc id, loc lock, loc id)
-	| releaseLock(loc id, loc lock, loc id)
+	| acquireLock(loc id, loc lock, loc dependentId)
+	| releaseLock(loc id, loc lock, loc dependentId)
+	| entryPoint(loc id, loc method)
+	| exitPoint(loc id, loc method)
 	;
