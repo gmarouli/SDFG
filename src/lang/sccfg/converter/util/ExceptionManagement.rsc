@@ -12,6 +12,9 @@ map[loc, set[loc]] getEnvironmentFromException(exceptionState(env, _)) = env;
 //Acquire actions
 rel[loc,loc] getAcquireActionsFromException(exceptionState(_, acqAc)) = acqAc;
 
-ExceptionState mergeStates(exceptionState(env, actions), exceptionState(newEnv, newActions)){
+ExceptionState mergeExceptionState(exceptionState(env, actions), exceptionState(newEnv, newActions)){
 	exceptionState(merge(env, newEnv), actions + newActions);
 }
+
+ExceptionState getExceptionState(map[str, ExceptionState] exs, str exceptionName)
+	= <exs[exceptionName], delete(exs, exceptionName)>;
