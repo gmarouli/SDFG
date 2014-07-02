@@ -12,60 +12,58 @@ import lang::sccfg::converter::util::ContainersManagement;
 import lang::sccfg::converter::util::EnvironmentManagement;
 
 //The functions are ordered according to the rascal/src/org/rascalImpl/library/lang/java/m3/AST.rsc [last accessed 13/5/2014]
-//
-////arrayAccess(Expression array, Expression index)
-//tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:arrayAccess(ar, index), map[loc,set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
-//	<stmts, indexRead, env, exs> = gatherStmtFromExpressions(m, index, env, stmts);
-//	stmts += indexRead;
-//	acquireActions += extractAcquireActions(indexRead);
-//	
-//	potential = addAndLock({Stmt::read(ar@src, ar@decl, id) | id <- getDependencyIds(indexRead)}, acquireActions); //have to find the right read	
-//	
-//	return <stmts, potential, env, acquireActions, exs>;
-//}
-//
-////newArray(Type type, list[Expression] dimensions, list[Expression] init)
-//tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:newArray(_, dimensions, init), map[loc,set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
-//	potential = {};
-//	exs = ();
-//	for(d <- dimensions){
-//		<stmts, potential1, env, exsC> = gatherStmtFromExpressions(m, d, env, volatileFields, acquireActions, stmts);
-//		exs = mergeExceptions(exs,exsC);
-//		potential += potential1;
-//		stmts += potential1;
-//		acquireActions += extractAcquireActions(potential1, volatileFields);
-//	}
-//	
-//	<stmts, potential2, env, exsC> = gatherStmtFromExpressions(m, init, env, volatileFields, acquireActions, stmts);
-//	exs = mergeExceptions(exs,exsC);
-//	stmts += potential2;
-//	potential += potential2;
-//	acquireActions += extractAcquireActions(potential2, volatileFields);
-//	
-//		
-//	loc con = |java+constructor:///array|;
-//	potential = addAndLock({create(e@src, con, id) | id <- getDependencyIds(potential)}, acquireActions);
-//	return <stmts, potential, env, acquireActions, exs>;
-//}
-//
-////newArray(Type type, list[Expression] dimensions)
-//tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:newArray(t, dimensions), map[loc,set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
-//	return gatherStmtFromExpressions(m , Expression::newArray(t, dimensions, Expression::null())[@src=e@src][@typ=e@typ], env, volatileFields, acquireActions, stmts);
-//}
-//
-////arrayInitializer(list[Expression] elements)
-//tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:arrayInitializer(list[Expression] elements), map[loc,set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
-//	potential = {};
-//	exs = ();
-//	for(el <- elements){
-//		<stmts, potentialC, env, exsC> = gatherStmtFromExpressions(m, el, env, volatileFields, acquireActions, stmts);
-//		exs = mergeExceptions(exs, exsC);
-//		potential += potentialC;
-//		stmts += potentialC;
-//		acquireActions += extractAcquireActions(potentialC, volatileFields);
-//	}
-//	return <stmts, potential, env, acquireActions, exs>;
-//}
+
+//arrayAccess(Expression array, Expression index)
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:arrayAccess(ar, index), map[loc,set[loc]] env, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
+	<stmts, indexRead, env, actionsInPath, exs> = gatherStmtFromExpressions(index, env, volatileFields, acquireActions, actionsInPath, stmts);
+	stmts += indexRead;
+	actionsInPath += extractAcquireActions(indexRead, volatileFields);
+	
+	potential = addAndLock({Stmt::read(ar@src, ar@decl, id) | id <- getDependencyIds(indexRead)}, acquireActions + actionsInPath); //have to find the right read	
+	
+	return <stmts, potential, env, actionsInPath, exs>;
+}
+
+//newArray(Type type, list[Expression] dimensions, Expression init)
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:newArray(_, dimensions, init), map[loc,set[loc]] env, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
+	potential = {};
+	exs = ();
+	for(d <- dimensions){
+		<stmts, potentialD, env, actionsInPath, exsD> = gatherStmtFromExpressions(d, env, volatileFields, acquireActions, actionsInPath, stmts);
+		exs = mergeExceptions(exs,exsD);
+		potential += potentialD;
+		stmts += potentialD;
+		actionsInPath += extractAcquireActions(potentialD, volatileFields);
+	}
+	
+	<stmts, potentialI, env, actionsInPath, exsI> = gatherStmtFromExpressions(init, env, volatileFields, acquireActions, actionsInPath, stmts);
+	exs = mergeExceptions(exs,exsI);
+	stmts += potentialI;
+	potential += potentialI;
+	actionsInPath += extractAcquireActions(potentialI, volatileFields);
+		
+	loc con = |java+constructor:///array|;
+	potential = addAndLock({create(e@src, con, id) | id <- getDependencyIds(potential)}, acquireActions + actionsInPath);
+	return <stmts, potential, env, actionsInPath, exs>;
+}
+
+//newArray(Type type, list[Expression] dimensions)
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:newArray(t, dimensions), map[loc,set[loc]] env, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts)
+	= gatherStmtFromExpressions(newArray(t, dimensions, Expression::null())[@typ = e@typ][@src = e@src], env, volatileFields, acquireActions, actionsInPath, stmts);
+
+//arrayInitializer(list[Expression] elements)
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:arrayInitializer(list[Expression] elements), map[loc,set[loc]] env, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
+	potential = {};
+	exs = ();
+	for(el <- elements){
+		<stmts, potentialC, env, actionsInPath, exsC> = gatherStmtFromExpressions(el, env, volatileFields, acquireActions, actionsInPath, stmts);
+		exs = mergeExceptions(exs, exsC);
+		potential += potentialC;
+		stmts += potentialC;
+		actionsInPath += extractAcquireActions(potentialC, volatileFields);
+	}
+	return <stmts, potential, env, actionsInPath, exs>;
+}
 
 //assignment(Expression lhs, str operator, Expression rhs)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:assignment(lhs,operator,rhs), map[loc,set[loc]] env, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
@@ -233,25 +231,25 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, Exception
 //	return <stmts, {}, env, acquireActions, exs>;
 //}
 //
-////variable(str name, int extraDimensions, Expression init)
-//tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:variable(name,_,rhs), map[loc,set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
-//	<stmts, potential, env, acquireActions, exs> = gatherStmtFromExpressions(m, rhs, env, volatileFields, acquireActions, stmts);
-//	stmts += potential;
-//	acquireActions += extractAcquireActions(potential, volatileFields);
-//	if(e@decl in volatileFields){
-//		stmts += addAndUnlock(stmts, e@src, e@decl);
-//	}
-//	
-//	stmts += addAndLock({Stmt::assign(e@src, e@decl, id) | id <- getDependencyIds(potential)}, acquireActions);
-//	env[e@decl] = {e@src};
-//	return <stmts, {}, env, acquireActions, exs>;
-//}
-//
-////bracket(Expression exp);
-//tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m, Expression e:\bracket(exp), map[loc,set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
-//	return gatherStmtFromExpressions(m, exp, env, volatileFields, acquireActions, stmts);
-//}
-//
+//variable(str name, int extraDimensions, Expression init)
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:variable(_, _, rhs), map[loc,set[loc]] env, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
+	<stmts, potential, env, actionsInPath, exs> = gatherStmtFromExpressions(rhs, env, volatileFields, acquireActions, actionsInPath, stmts);
+	stmts += potential;
+	actionsInPath += extractAcquireActions(potential, volatileFields);
+	if(e@decl in volatileFields){
+		stmts += addAndUnlock(stmts, e@src, e@decl);
+	}
+	
+	stmts += addAndLock({Stmt::assign(e@src, e@decl, id) | id <- getDependencyIds(potential)}, acquireActions + actionsInPath);
+	env[e@decl] = {e@src};
+	return <stmts, {}, env, acquireActions, exs>;
+}
+
+//bracket(Expression exp);
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:\bracket(exp), map[loc,set[loc]] env, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
+	return gatherStmtFromExpressions(exp, env, volatileFields, acquireActions, actionsInPath, stmts);
+}
+
 ////this() cannot change so maybe it is not needed here
 //tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:this(), map[loc,set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
 //	//potential = {Stmt::read(e@src, |java+field:///|+ extractClassName(m@decl)+"/this", emptyId)};
