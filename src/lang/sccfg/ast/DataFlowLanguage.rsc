@@ -20,4 +20,5 @@ data Stmt
 	| releaseLock(loc id, loc lock, loc dependentId)
 	| entryPoint(loc id, loc method)
 	| exitPoint(loc id, loc method)
+	| change(loc id, loc typ, loc dependency) 
 	;
