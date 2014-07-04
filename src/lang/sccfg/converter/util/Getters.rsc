@@ -68,3 +68,5 @@ bool isClass(TypeSymbol c:class(_,_))
 	= true;
 default bool isClass(TypeSymbol c)
 	= false;
+	
+bool isField(loc decl) = decl.scheme == "java+field";

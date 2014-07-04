@@ -13,7 +13,12 @@ map[loc,set[loc]] getContinueEnvironment(flowEnvironment(env, _, _)) = env;
 map[loc,set[loc]] getBreakEnvironment(flowEnvironment(_, env, _)) = env;
 map[loc,set[loc]] getReturnEnvironment(flowEnvironment(_, _, env)) = env;
 
-
+map[loc,set[loc]] updateAll(map[loc,set[loc]] env, set[loc] decls, loc dep){
+	for(d <- decls){
+		env[d] = {dep}; 
+	}
+	return env;
+}
 
 map[loc,set[loc]] updateEnvironment(map[loc,set[loc]] env, map[loc,set[loc]] tempEnv){
 	for(variable <- tempEnv){

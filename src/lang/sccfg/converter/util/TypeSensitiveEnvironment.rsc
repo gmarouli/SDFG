@@ -26,7 +26,14 @@ TypeSensitiveEnvironment setDependency(TypeSensitiveEnvironment t:typeEnv(decl, 
 	= typeEnv(decl, {dep});
 	
 set[loc] getDeclsFromTypeEnv(TypeSensitiveEnvironment ts:typeEnv(decls, _)) = decls;
-	
+
+set[loc] getDependenciesFromType(map[loc,TypeSensitiveEnvironment] typesOf, loc typ){
+	typesOf[typ] = typesOf[typ] ? emptyTypeSensitiveEnvironment();
+	return getDependencies(typesOf[typ]);
+}
+
+set[loc] getDependencies(TypeSensitiveEnvironment t:typeEnv(_, deps)) = deps;
+
 map[loc,TypeSensitiveEnvironment] update(map[loc,TypeSensitiveEnvironment] typesOf, loc typ, loc src){
 	typesOf[typ] = setDependency(typesOf[typ], src);
 	return typesOf;
