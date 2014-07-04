@@ -95,7 +95,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	}
 	
 	//Record the changes before locking the write
-	if(qualifiedName(qName, n) := lhs || fieldAccess(_, qName, _) := lhs){
+	if(qualifiedName(qName, n) := lhs || fieldAccess(_, qName, _) := lhs || qName:fieldAccess(_, _) := lhs){
 		<changed, env, typesOf> = gatherChangedClasses(qName, env, typesOf);
 		stmts += addAndLock(changed, acquireActions + actionsInPath);
 	}
@@ -208,16 +208,21 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	return <stmts, potential, env, typesOf, actionsInPath, exs>;
 }
 
-////fieldAccess(bool isSuper, str name)
-//tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:fieldAccess(isSuper, _), map[loc,set[loc]] env, map[loc, tuple[set[loc],loc]] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
-//	if(!isSuper){
-//		assert false : "Field access without expression and not super!";
-//	}
-//	potential = addAndLock({Stmt::read(e@src, e@decl, writtenBy) | writtenBy <- env[e@decl] ? {emptyId}},
-//			   acquireActions);
-//	return <stmts, potential, env, actionsInPath, ()>;
-//}
-//
+//fieldAccess(bool isSuper, str name)
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:fieldAccess(isSuper, _), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
+	if(!isSuper){
+		assert false : "Field access without expression and not super!";
+	}
+	superSrc = e@src;
+	superSrc.length = 5;
+	stmts += addAndLock({Stmt::read(superSrc, |java+class:///|+extractClassName(e@decl)+"/super", dep) | dep <- getDependenciesFromType(typesOf, |java+class:///|+extractClassName(e@decl))},acquireActions + actionsInPath);
+	
+	potential = addAndLock({Stmt::read(e@src, e@decl, writtenBy) | writtenBy <- env[e@decl] ? {emptyId}}
+						  +{Stmt::read(e@src, e@decl, superSrc)},
+						    acquireActions + actionsInPath);
+	return <stmts, potential, env, typesOf, actionsInPath, ()>;
+}
+
 //////instanceof(Expression leftside, Type rightSide)
 ////tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:\instanceof(lsh,_), map[loc,set[loc]] env, map[loc, tuple[set[loc],loc]] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
 ////	<stmts, potential, env, exs> = gatherStmtFromExpressions(m, lhs, env, stmts);
@@ -288,10 +293,10 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	return <stmts, {}, env, typesOf, acquireActions, exs>;
 }
 
-////bracket(Expression exp);
-//tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:\bracket(exp), map[loc,set[loc]] env, map[loc, tuple[set[loc],loc]] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
-//	return gatherStmtFromExpressions(exp, env, volatileFields, acquireActions, actionsInPath, stmts);
-//}
+//bracket(Expression exp);
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:\bracket(exp), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
+	return gatherStmtFromExpressions(exp, env, typesOf, volatileFields, acquireActions, actionsInPath, stmts);
+}
 
 //this() cannot change so maybe it is not needed here, but we need the depedency for the synchronized
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:this(), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
@@ -299,18 +304,18 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	return <stmts, potential, env, typesOf, actionsInPath, ()>;
 }
 
-////this(Expression exp)
-//tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:this(exp), map[loc,set[loc]] env, map[loc, tuple[set[loc],loc]] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
-//	assert false : "Found this with expression in: <e>!";
-//	return <stmts, {}, env, actionsInPath, ()>;
-//}
-//
-//////super()
-////tuple[set[Stmt], set[Stmt], map[loc,set[loc]], rel[loc,loc], map[str, map[loc,set[loc]]]] gatherStmtFromExpressions(Declaration m , Expression e:super(), map[loc,set[loc]] env, map[loc, tuple[set[loc],loc]] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
-////	assert false : "Found super in: <e>!";
-////	return <stmts, {}, env, acquireActions, ()>;
-////}
-////
+//this(Expression exp)
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:this(exp), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
+	assert false : "Found this with expression in: <e>!";
+	return <stmts, {}, env, typesOf, actionsInPath, ()>;
+}
+
+//super()
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:super(), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
+	assert false : "Found super in: <e>!";
+	return <stmts, {}, env, typesOf, actionsInPath, ()>;
+}
+
 //declarationExpression(Declaration d)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Declaration m , Expression e:declarationExpression(d), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
 	exs = ();
@@ -464,6 +469,11 @@ tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherCh
 
 tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:this(), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf)
 	= <{change(e@src, getClassDeclFromType(e@typ), e@src)}, updateAll(env, getDeclsFromTypeEnv(typesOf[getClassDeclFromType(e@typ)]), e@src), update(typesOf, getClassDeclFromType(e@typ), e@src)>;
+tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:fieldAccess(true, _), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf){
+	superSrc = e@src;
+	superSrc.length = 5;
+	return <{change(superSrc, |java+class:///|+extractClassName(e@decl), superSrc)}, updateAll(env, getDeclsFromTypeEnv(typesOf[|java+class:///|+extractClassName(e@decl)]), superSrc), update(typesOf, |java+class:///|+extractClassName(e@decl), superSrc)>;
+}
 tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression f:fieldAccess(_, exp, name), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf){
 	<newStmts, env, typesOf> = gatherChangedClasses(exp, env, typesOf);
 	return <{change(f@src, getClassDeclFromType(f@typ), f@src)} + newStmts, updateAll(env, getDeclsFromTypeEnv(typesOf[getClassDeclFromType(f@typ)]), f@src), update(typesOf, getClassDeclFromType(f@typ), f@src)>;
