@@ -1,5 +1,10 @@
 module lang::sccfg::converter::util::Getters
 
+import String;
+
+
+import lang::java::m3::TypeSymbol;
+
 import lang::sccfg::ast::DataFlowLanguage;
 
 bool isDataAccess(Stmt s:acquireLock(_,_,_)) = false;
@@ -40,3 +45,26 @@ loc getVarFromStmt(Stmt::exitPoint(_, var)) = var;
 
 set[Stmt] getSynchronizationActions(Program p)
 	= {s | s <- p.statements, !isDataAccess(s)};
+	
+str extractClassName(loc method) 
+	= substring(method.path,0,findLast(method.path,"/"));
+	
+set[loc] getDependencyIds(set[Stmt] potential){
+	if(potential == {}){
+		return {emptyId};
+	}
+	else{
+		return { id | Stmt::read(id, _, _) <- potential}
+			+  { id | Stmt::call(id, _, _) <- potential}
+			+  { id | Stmt::create(id, _, _) <- potential}
+			;	
+	}
+}
+
+loc getClassDeclFromType(TypeSymbol c:class(decl, []))
+	= decl;
+
+bool isClass(TypeSymbol c:class(_,_))
+	= true;
+default bool isClass(TypeSymbol c)
+	= false;
