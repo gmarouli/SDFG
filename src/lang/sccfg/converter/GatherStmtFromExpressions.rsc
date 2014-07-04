@@ -95,9 +95,16 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	}
 	
 	//Record the changes before locking the write
-	if(qualifiedName(qName, n) := lhs){
+	if(qualifiedName(qName, n) := lhs || fieldAccess(_, qName, _) := lhs){
 		<changed, env, typesOf> = gatherChangedClasses(qName, env, typesOf);
 		stmts += addAndLock(changed, acquireActions + actionsInPath);
+	}
+	else if(isField(lhs@decl)){
+		thisSrc = lhs@src;
+		thisSrc.offset += 1;
+		stmts += addAndLock({change(thisSrc, |java+class:///|+extractClassName(lhs@decl), thisSrc)} + {read(thisSrc,|java+class:///|+extractClassName(lhs@decl)+"/this", dep) | dep <- getDependenciesFromType(typesOf, |java+class:///|+extractClassName(lhs@decl))}, actionsInPath + acquireActions);
+		env = updateAll(env, getDeclsFromTypeEnv(typesOf[|java+class:///|+extractClassName(lhs@decl)]), thisSrc);
+		typesOf = update(typesOf, |java+class:///|+extractClassName(lhs@decl), thisSrc);
 	}
 	
 	//get the variable name
@@ -189,20 +196,18 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 //	return <stmts, potential + potentialIf + potentialElse, env, actionsInPath + actionsInPathIf + actionsInPathElse, exs>;
 //}
 //
-////fieldAccess(bool isSuper, Expression expression, str name)
-//tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:fieldAccess(_,exp,_), map[loc,set[loc]] env, map[loc, tuple[set[loc],loc]] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
-//	<stmts, potential, env, actionsInPath, exs> = gatherStmtFromExpressions(exp, env, volatileFields, acquireActions, actionsInPath, stmts);
-//	potential = removeThis(potential);
-//	stmts += potential;
-//	actionsInPath += extractAcquireActions(potential, volatileFields);
-//	println("Accessing field");
-//	iprintln(env[e@decl]);
-//	potential = addAndLock({Stmt::read(e@src, e@decl, writtenBy) | writtenBy <- env[e@decl] ? {emptyId}} 
-//						 + {Stmt::read(e@src, e@decl, dependOn) | dependOn <- potential}, 
-//						 acquireActions + actionsInPath);	
-//	return <stmts, potential, env, actionsInPath, exs>;
-//}
-//
+//fieldAccess(bool isSuper, Expression expression, str name)
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:fieldAccess(_,exp,_), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
+	<stmts, potential, env, typesOf, actionsInPath, exs> = gatherStmtFromExpressions(exp, env, typesOf, volatileFields, acquireActions, actionsInPath, stmts);
+	stmts += potential;
+	actionsInPath += extractAcquireActions(potential, volatileFields);
+
+	potential = addAndLock({Stmt::read(e@src, e@decl, writtenBy) | writtenBy <- env[e@decl] ? {emptyId}} 
+						 + {Stmt::read(e@src, e@decl, getIdFromStmt(dependOn)) | dependOn <- potential}, 
+						 acquireActions + actionsInPath);	
+	return <stmts, potential, env, typesOf, actionsInPath, exs>;
+}
+
 ////fieldAccess(bool isSuper, str name)
 //tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:fieldAccess(isSuper, _), map[loc,set[loc]] env, map[loc, tuple[set[loc],loc]] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
 //	if(!isSuper){
@@ -220,41 +225,55 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 ////	acquireActions += extractAcquireActions(potential);
 ////	return <stmts, {}, env, acquireActions, exs>;
 ////}
-////
-////methodCall(bool isSuper, str name, list[Expression] arguments)
-//tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:methodCall(isSuper,name,args), map[loc,set[loc]] env, map[loc, tuple[set[loc],loc]] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
-//	return gatherStmtFromExpressions(methodCall(isSuper, Expression::this(), name, args)[@decl = e@decl][@typ = e@typ][@src = e@src], env, volatileFields, acquireActions, actionsInPath, stmts);
-//}
-//
-////method(bool isSuper, Expression receiver, str name, list[Expression] arguments)
-//tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:methodCall(isSuper, receiver, name, args), map[loc,set[loc]] env, map[loc, tuple[set[loc],loc]] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
-//	exs = ();
-//	potential = {};
-//	for(arg <- args){
-//		<stmts, potentialA, env, actionsInPath, exsA> = gatherStmtFromExpressions(arg, env, volatileFields, acquireActions, actionsInPath, stmts);
-//		potential += potentialA;
-//		stmts += potentialA;
-//		actionsInPath += extractAcquireActions(potentialA, volatileFields);
-//		exs = mergeExceptions(exs,exsA);
-//	}
-//	loc recDecl;
-//	if(receiver := this())
-//		recDecl = |java+class:///|+extractClassName(e@decl)+"/this";
-//	else
-//		recDecl = receiver@decl;
-//	potential += addAndLock({Stmt::call(e@src, recDecl, e@decl, arg) | arg <- getDependencyIds(potential)}, acquireActions + actionsInPath);
-//	stmts += potential;
-//	for(ex <- exceptions[e@decl] ? {}){
-//		if(ex in exs){
-//			exs[ex] = merge(exs[ex],env);
-//		}
-//		else{
-//			exs[ex] = env;
-//		}
-//	}
-//	return <stmts, potential, env, actionsInPath, exs>;
-//}
-//
+
+//methodCall(bool isSuper, str name, list[Expression] arguments)
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:methodCall(isSuper,name,args), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
+	return gatherStmtFromExpressions(methodCall(isSuper, Expression::this(), name, args)[@decl = e@decl][@typ = e@typ][@src = e@src], env, typesOf, volatileFields, acquireActions, actionsInPath, stmts);
+}
+
+//method(bool isSuper, Expression receiver, str name, list[Expression] arguments)
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:methodCall(isSuper, receiver, name, args), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
+	exs = ();
+	potential = {};
+	if(!(receiver := this())){
+		<stmts, potentialR, env, typesOf, actionsInPath, exs> = gatherStmtFromExpressions(receiver, env, typesOf, volatileFields, acquireActions, actionsInPath, stmts);
+		stmts += potentialR;
+		actionsInPath += extractAcquireActions(potential, volatileFields);
+	}
+	for(arg <- args){
+		<stmts, potentialA, env, typesOf, actionsInPath, exsA> = gatherStmtFromExpressions(arg, env, typesOf, volatileFields, acquireActions, actionsInPath, stmts);
+		potential += potentialA;
+		stmts += potentialA;
+		actionsInPath += extractAcquireActions(potentialA, volatileFields);
+		exs = mergeExceptions(exs,exsA);
+	}
+	loc recSrc;
+	if(receiver := this()){
+		recSrc = e@src;
+		recSrc.offset += 1;
+		stmts += addAndLock({change(recSrc, |java+class:///|+extractClassName(e@decl), recSrc)} + {read(recSrc,|java+class:///|+extractClassName(e@decl)+"/this", dep) | dep <- getDependenciesFromType(typesOf, |java+class:///|+extractClassName(e@decl))}, actionsInPath + acquireActions);
+		env = updateAll(env, getDeclsFromTypeEnv(typesOf[|java+class:///|+extractClassName(e@decl)]), recSrc);
+		typesOf = update(typesOf, |java+class:///|+extractClassName(e@decl), recSrc);
+	}
+	else{
+		recSrc = receiver@src;
+		<changed, env, typesOf> = gatherChangedClasses(receiver, env, typesOf);
+		stmts += addAndLock(changed, actionsInPath + acquireActions);	
+	}
+		
+	potential += addAndLock({Stmt::call(e@src, recSrc, e@decl, arg) | arg <- getDependencyIds(potential)}, acquireActions + actionsInPath);
+	stmts += potential;
+	for(ex <- exceptions[e@decl] ? {}){
+		if(ex in exs){
+			exs[ex] = merge(exs[ex],env);
+		}
+		else{
+			exs[ex] = env;
+		}
+	}
+	return <stmts, potential, env, typesOf, actionsInPath, exs>;
+}
+
 //variable(str name, int extraDimensions, Expression init)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:variable(_, _, rhs), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
 	<stmts, potential, env, typesOf, actionsInPath, exs> = gatherStmtFromExpressions(rhs, env, typesOf, volatileFields, acquireActions, actionsInPath, stmts);
@@ -273,13 +292,13 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 //tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:\bracket(exp), map[loc,set[loc]] env, map[loc, tuple[set[loc],loc]] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
 //	return gatherStmtFromExpressions(exp, env, volatileFields, acquireActions, actionsInPath, stmts);
 //}
-//
-////this() cannot change so maybe it is not needed here, but we need the depedency for the synchronized
-//tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:this(), map[loc,set[loc]] env, map[loc, tuple[set[loc],loc]] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
-//	potential = addAndLock({Stmt::read(e@src, getClassDeclFromType(e@typ) + "/this", emptyId)}, actionsInPath + acquireActions);
-//	return <stmts, potential, env, actionsInPath, ()>;
-//}
-//
+
+//this() cannot change so maybe it is not needed here, but we need the depedency for the synchronized
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:this(), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
+	potential = addAndLock({Stmt::read(e@src, getClassDeclFromType(e@typ) + "/this", dep) | dep <- getDependenciesFromType(typesOf, getClassDeclFromType(e@typ))}, actionsInPath + acquireActions);
+	return <stmts, potential, env, typesOf, actionsInPath, ()>;
+}
+
 ////this(Expression exp)
 //tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:this(exp), map[loc,set[loc]] env, map[loc, tuple[set[loc],loc]] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
 //	assert false : "Found this with expression in: <e>!";
@@ -305,40 +324,41 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	return <stmts, {}, env, typesOf, actionsInPath, exs>;
 }
 
-////infix(Expression lhs, str operator, Expression rhs, list[Expression] extendedOperands)
-//tuple[set[Stmt], set[Stmt], map[loc,set[loc]], lrel[loc,loc], map[str, ExceptionState]] gatherStmtFromExpressions(Expression e:infix(lhs, operator, rhs, ext), map[loc,set[loc]] env, map[loc, tuple[set[loc],loc]] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
-//	operands = [rhs] + ext;
-//	<stmts, potential, env, actionsInPath, exs> = gatherStmtFromExpressions(lhs, env, volatileFields, acquireActions, actionsInPath, stmts);
-//	stmts += potential;
-//	actionsInPath += extractAcquireActions(potential, volatileFields);
-//	
-//	if(operator == "&&" || operator == "||"){	
-//		envOp = env;
-//		for(op <- operands){
-//			<stmts, potentialOp, envOp, exsOp> = gatherStmtFromExpressions(op, envOp, volatileFields, acquireActions, actionsInPath, stmts);
-//			stmts += potentialOp;
-//			actionsInPath += extractAcquireActions(potentialOp, volatileFields);
-//			env = mergeNestedEnvironment(env,envOp);
-//			exs = mergeExceptions(exs, exsOp);
-//			//The expressions are already in stmts, however we need to fill the potential for dependencies
-//			potential += potentialOp;
-//		}			
-//		return <stmts, potential, env, actionsInPath, exs>;
-//	}
-//	else{
-//		exs = ();
-//		dependencies = potential;
-//		for(op <- operands){
-//			<stmts, potential, env, actionsInPath, exsOp> = gatherStmtFromExpressions(op, env, volatileFields, acquireActions, actionsInPath, stmts);
-//			stmts += potential;
-//			dependencies += potential;
-//			actionsInPath += extractAcquireActions(potential, volatileFields);
-//			exs = mergeExceptions(exs,exsOp);
-//		}
-//		//the reads are not potential because there are operations done one them that cannot be statements!
-//		return <stmts, dependencies, env, actionsInPath, exs>;
-//	}
-//}
+//infix(Expression lhs, str operator, Expression rhs, list[Expression] extendedOperands)
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], lrel[loc,loc], map[str, ExceptionState]]  gatherStmtFromExpressions(e:infix(lhs, operator, rhs, ext), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
+	operands = [rhs] + ext;
+	<stmts, potential, env, typesOf, actionsInPath, exs> = gatherStmtFromExpressions(lhs, env, typesOf, volatileFields, acquireActions, actionsInPath, stmts);
+	stmts += potential;
+	actionsInPath += extractAcquireActions(potential, volatileFields);
+	
+	if(operator == "&&" || operator == "||"){	
+		envOp = env;
+		for(op <- operands){
+			<stmts, potentialOp, envOp, typesOp, exsOp> = gatherStmtFromExpressions(op, envOp, typesOp, volatileFields, acquireActions, actionsInPath, stmts);
+			stmts += potentialOp;
+			actionsInPath += extractAcquireActions(potentialOp, volatileFields);
+			env = mergeNestedEnvironment(env,envOp);
+			typesOp = mergeTypeEnvironment(typesOf, typesOp);
+			exs = mergeExceptions(exs, exsOp);
+			//The expressions are already in stmts, however we need to fill the potential for dependencies
+			potential += potentialOp;
+		}			
+		return <stmts, potential, env, typesOf, actionsInPath, exs>;
+	}
+	else{
+		exs = ();
+		dependencies = potential;
+		for(op <- operands){
+			<stmts, potential, env, typesOf, actionsInPath, exsOp> = gatherStmtFromExpressions(op, env, typesOf, volatileFields, acquireActions, actionsInPath, stmts);
+			stmts += potential;
+			dependencies += potential;
+			actionsInPath += extractAcquireActions(potential, volatileFields);
+			exs = mergeExceptions(exs,exsOp);
+		}
+		//the reads are not potential because there are operations done one them that cannot be statements!
+		return <stmts, dependencies, env, typesOf, actionsInPath, exs>;
+	}
+}
 
 //postfix(Expression operand, str operator)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], lrel[loc,loc], map[str, ExceptionState]]  gatherStmtFromExpressions(Expression e:postfix(operand, operator), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, lrel[loc,loc] acquireActions, lrel[loc,loc] actionsInPath, set[Stmt] stmts){
@@ -348,11 +368,18 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 		actionsInPath += extractAcquireActions(potential, volatileFields);
 		
 		//Record the changes before locking the write
-		if(qualifiedName(qName, n) := operand){
+		if(qualifiedName(qName, n) := operand || fieldAccess(_, qName, _) := operand){
 			<changed, env, typesOf> = gatherChangedClasses(qName, env, typesOf);
 			stmts += addAndLock(changed, acquireActions + actionsInPath);
 		}
-		
+		else if(isField(operand@decl)){
+			thisSrc = operand@src;
+			thisSrc.offset += 1;
+			stmts += addAndLock({change(thisSrc, |java+class:///|+extractClassName(operand@decl), thisSrc)} + {read(thisSrc,|java+class:///|+extractClassName(operand@decl)+"/this", dep) | dep <- getDependenciesFromType(typesOf, |java+class:///|+extractClassName(operand@decl))}, actionsInPath + acquireActions);
+			env = updateAll(env, getDeclsFromTypeEnv(typesOf[|java+class:///|+extractClassName(operand@decl)]), thisSrc);
+			typesOf = update(typesOf, |java+class:///|+extractClassName(operand@decl), thisSrc);
+		}
+	
 		if(operand@decl in volatileFields){
 			stmts += addAndUnlock(stmts, e@src, operand@decl);
 		}
@@ -377,11 +404,18 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 		actionsInPath += extractAcquireActions(potential, volatileFields);
 		
 		//Record the changes before locking the write
-		if(qualifiedName(qName, n) := operand){
+		if(qualifiedName(qName, n) := operand || fieldAccess(_, qName, _) := operand){
 			<changed, env, typesOf> = gatherChangedClasses(qName, env, typesOf);
 			stmts += addAndLock(changed, acquireActions + actionsInPath);
 		}
-		
+		else if(isField(operand@decl)){
+			thisSrc = operand@src;
+			thisSrc.offset += 1;
+			stmts += addAndLock({change(thisSrc, |java+class:///|+extractClassName(operand@decl), thisSrc)} + {read(thisSrc,|java+class:///|+extractClassName(operand@decl)+"/this", dep) | dep <- getDependenciesFromType(typesOf, |java+class:///|+extractClassName(operand@decl))}, actionsInPath + acquireActions);
+			env = updateAll(env, getDeclsFromTypeEnv(typesOf[|java+class:///|+extractClassName(operand@decl)]), thisSrc);
+			typesOf = update(typesOf, |java+class:///|+extractClassName(operand@decl), thisSrc);
+		}
+	
 		stmts += addAndLock({Stmt::assign(e@src, operand@decl, id) | id <- getDependencyIds(potential)}, acquireActions + actionsInPath);
 		env[operand@decl] = {e@src};
 		
@@ -420,14 +454,17 @@ set[Stmt] addAndUnlock(set[Stmt] newStmts, loc idL, l){
 }
 lrel[loc, loc] extractAcquireActions(set[Stmt] potential, set[loc] volFields)
 	= [ <id, var> |  read(id, var, _) <- potential, var in volFields];
-	
-//set[Stmt] removeThis(set[Stmt] stmts){
-//	return {stmt | stmt:read(_, var, _) <- stmts, !endsWith(var.path, "/this")};
-//}
-//
+
 tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:simpleName(_), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf)
 	= <{change(e@src, getClassDeclFromType(e@typ), e@src)}, updateAll(env, getDeclsFromTypeEnv(typesOf[getClassDeclFromType(e@typ)]), e@src), update(typesOf, getClassDeclFromType(e@typ), e@src)>;
 tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression q:qualifiedName(exp, name), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf){
 	<newStmts, env, typesOf> = gatherChangedClasses(exp, env, typesOf);
 	return <{change(name@src, getClassDeclFromType(name@typ), name@src)} + newStmts, updateAll(env, getDeclsFromTypeEnv(typesOf[getClassDeclFromType(name@typ)]), name@src), update(typesOf, getClassDeclFromType(name@typ), name@src)>;
+}
+
+tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:this(), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf)
+	= <{change(e@src, getClassDeclFromType(e@typ), e@src)}, updateAll(env, getDeclsFromTypeEnv(typesOf[getClassDeclFromType(e@typ)]), e@src), update(typesOf, getClassDeclFromType(e@typ), e@src)>;
+tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression f:fieldAccess(_, exp, name), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf){
+	<newStmts, env, typesOf> = gatherChangedClasses(exp, env, typesOf);
+	return <{change(f@src, getClassDeclFromType(f@typ), f@src)} + newStmts, updateAll(env, getDeclsFromTypeEnv(typesOf[getClassDeclFromType(f@typ)]), f@src), update(typesOf, getClassDeclFromType(f@typ), f@src)>;
 }
