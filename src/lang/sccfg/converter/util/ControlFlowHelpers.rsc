@@ -19,23 +19,6 @@ tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, rel[loc,loc], map[str, map
 	return <stmts, env, mergeFlow(fenvIf, fenvElse), acquireActions, mergeExceptions(exsIf, exsElse)>;
 }
 
-tuple[set[Stmt], set[Stmt], map[loc, set[loc]], rel[loc,loc], map[str, map[loc, set[loc]]]] shortCircuit(Declaration m, list[Expression] e:[exp, *exps], map[loc, set[loc]] env, set[loc] volatileFields, rel[loc, loc] acquireActions, set[Stmt] stmts){
-	<stmts, potential, env, acquireActions, exs> = gatherStmtFromExpressions(m, exp, env, volatileFields, acquireActions, stmts);
-	stmts += potential;
-	acquireActions += extractAcquireActions(potential, volatileFields);
-	
-	envOp = env;
-	for(expRest <- exps){
-		<stmts, potentialOp, envOp, exsOp> = gatherStmtFromExpressions(m, expRest, envOp, locks, stmts);
-		stmts += potentialOp;
-		acquireActions += extractAcquireActions(potentialOp, volatileFields);
-		env = mergeNestedEnvironment(env,envOp);
-		exs = mergeExceptions(exs, exsOp);
-		potential += potentialOp;
-	}			
-	return <stmts, potential, env, acquireActions, exs>;
-}
-
 
 tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, rel[loc,loc], map[str, map[loc, set[loc]]]] dealWithLoopsConditionFirst(Declaration m, list[Expression] initializers, Expression cond, list[Expression] updaters, Statement body, map[loc, set[loc]] env, set[loc] volatileFields, rel[loc, loc] acquireActions, set[Stmt] stmts){
 	outerEnv = env;

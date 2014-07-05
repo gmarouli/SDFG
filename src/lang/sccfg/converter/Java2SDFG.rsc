@@ -87,7 +87,7 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		
 		top-down-break visit(b) {
 			case Expression e : <methodStmts, _, env, typesOf, actionsInPath, _> = gatherStmtFromExpressions(e, env, typesOf, volatileFields, acquireActions, actionsInPath, methodStmts);
-//			case Statement s : <methodStmts, env, _, acquireActions, _> = gatherStmtFromStatements(m, s, env, volatileFields, acquireActions, methodStmts);
+			case Statement s : <methodStmts, env, typesOf, _, actionsInPath, _> = gatherStmtFromStatements(s, env, typesOf, volatileFields, acquireActions, actionsInPath, methodStmts);
 		}
 		exitSrc = m@src;
 		exitSrc.offset = m@src.offset + m@src.length -1;
