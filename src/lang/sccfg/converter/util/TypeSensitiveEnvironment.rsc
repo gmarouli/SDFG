@@ -7,7 +7,7 @@ data TypeSensitiveEnvironment = typeEnv(set[loc] decls, set[loc] dependencies);
 
 TypeSensitiveEnvironment emptyTypeSensitiveEnvironment() = typeEnv({}, {emptyId});
 
-map[loc, TypeSensitiveEnvironment] mergeTypeEnvironment(map[loc, TypeSensitiveEnvironment] env1, map[loc, TypeSensitiveEnvironment] env2){
+map[loc, TypeSensitiveEnvironment] mergeTypesEnvironment(map[loc, TypeSensitiveEnvironment] env1, map[loc, TypeSensitiveEnvironment] env2){
 	for(typ <- env2){
 		if(typ in env1){
 			env1[typ] = merge(env1[typ], env2[typ]);

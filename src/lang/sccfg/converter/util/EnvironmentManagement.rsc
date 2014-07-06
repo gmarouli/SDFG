@@ -1,17 +1,29 @@
 module lang::sccfg::converter::util::EnvironmentManagement
 
-data FlowEnvironment = flowEnvironment(map[loc,set[loc]] continueEnv, map[loc,set[loc]] breakEnv, map[loc,set[loc]] retEnv);
+import lang::sccfg::converter::util::State;
+import lang::sccfg::converter::util::TypeSensitiveEnvironment;
 
-FlowEnvironment emptyFlowEnvironment() = flowEnvironment((), (), ());
-FlowEnvironment initializeContinueEnvironment(map[loc,set[loc]] env) 
-	= flowEnvironment(env, (), ());
-FlowEnvironment initializeBreakEnvironment(map[loc,set[loc]] env) 
-	= flowEnvironment((), env, ());
-FlowEnvironment initializeReturnEnvironment(map[loc,set[loc]] env) 
-	= flowEnvironment((), (), env);
-map[loc,set[loc]] getContinueEnvironment(flowEnvironment(env, _, _)) = env;
-map[loc,set[loc]] getBreakEnvironment(flowEnvironment(_, env, _)) = env;
-map[loc,set[loc]] getReturnEnvironment(flowEnvironment(_, _, env)) = env;
+data FlowEnvironment = flowEnvironment(State continueState, State breakState, State retState);
+
+FlowEnvironment emptyFlowEnvironment() = flowEnvironment(emptyState(), emptyState(), emptyState());
+
+FlowEnvironment initializeContinueState(map[loc,set[loc]] env, map[loc,TypeSensitiveEnvironment] typesOf, rel[loc,loc] actions) 
+	= flowEnvironment(state(env, typesOf, actions), emptyState(), emptyState());
+FlowEnvironment initializeBreakState(map[loc,set[loc]] env, map[loc,TypeSensitiveEnvironment] typesOf, rel[loc,loc] actions) 
+	= flowEnvironment(emptyState(), state(env, typesOf, actions), emptyState());
+FlowEnvironment initializeReturnState(map[loc,set[loc]] env, map[loc,TypeSensitiveEnvironment] typesOf, rel[loc,loc] actions) 
+	= flowEnvironment(emptyState(), emptyState(), state(env, typesOf, actions));
+	
+FlowEnvironment initializeContinueState(State s) 
+	= flowEnvironment(s, emptyState(), emptyState());
+FlowEnvironment initializeBreakState(State s) 
+	= flowEnvironment(emptyState(), s, emptyState());
+FlowEnvironment initializeReturnState(State s) 
+	= flowEnvironment(emptyState(), emptyState(), s);
+
+State getContinueState(flowEnvironment(env, _, _)) = env;
+State getBreakState(flowEnvironment(_, env, _)) = env;
+State getReturnState(flowEnvironment(_, _, env)) = env;
 
 map[loc,set[loc]] updateAll(map[loc,set[loc]] env, set[loc] decls, loc dep){
 	for(d <- decls){
@@ -36,18 +48,6 @@ map[loc,set[loc]] mergeNestedEnvironment(map[loc,set[loc]] env, map[loc,set[loc]
 		}
 	}
 	return env;
-}
-
-map[loc,set[loc]] merge(map[loc,set[loc]] env1, map[loc,set[loc]] env2){
-	for(variable <- env2){
-		if(variable in env1){
-			env1[variable] = env1[variable] + env2[variable];
-		}
-		else{
-			env1[variable] = env2[variable];
-		}
-	}
-	return env1;
 }
 
 FlowEnvironment mergeFlow(flowEnvironment(envC1, envB1, envR1), flowEnvironment(envC2, envB2, envR2))

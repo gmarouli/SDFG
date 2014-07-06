@@ -82,12 +82,13 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		map[loc, set[loc]] typesOfParam = index({ <getClassDeclFromType(p@typ),p@decl> | p <- parameters, isClass(p@typ)});
 		map[loc,TypeSensitiveEnvironment] typesOf = ( t : typeEnv(typesOfParam[t],{}) | t <- typesOfParam);
 		set[Stmt] methodStmts = {entryPoint(m@src, m@decl)};
-		lrel[loc,loc] acquireActions = [];
+		rel[loc,loc] acquireActions = {};
 		
 		top-down-break visit(b) {
 			case Expression e : <methodStmts, _, env, typesOf, acquireActions, _> = gatherStmtFromExpressions(e, env, typesOf, volatileFields, acquireActions, methodStmts);
-			//case Statement s : <methodStmts, env, typesOf, _, acquireActions, _> = gatherStmtFromStatements(s, env, typesOf, volatileFields, acquireActions, methodStmts);
+			case Statement s : <methodStmts, env, typesOf, acquireActions, _> = gatherStmtFromStatements(s, env, typesOf, volatileFields, acquireActions, methodStmts);
 		}
+		//return environment
 		exitSrc = m@src;
 		exitSrc.offset = m@src.offset + m@src.length -1;
 		methodStmts += addAndLock({exitPoint(exitSrc, m@decl)}, acquireActions);
