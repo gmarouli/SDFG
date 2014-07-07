@@ -53,14 +53,14 @@ map[loc,set[loc]] mergeNestedEnvironment(map[loc,set[loc]] env, map[loc,set[loc]
 FlowEnvironment mergeFlow(flowEnvironment(envC1, envB1, envR1), flowEnvironment(envC2, envB2, envR2))
 	= flowEnvironment(merge(envC1, envC2), merge(envB1, envB2), merge(envR1, envR2)); 
 	
-FlowEnvironment updateContinue(flowEnvironment(envC, envB, envR), map[loc,set[loc]] env)
-	= flowEnvironment(updateEnvironment(envC, env), envB, envR); 
+FlowEnvironment updateContinue(flowEnvironment(envC, envB, envR), State s)
+	= flowEnvironment(s, envB, envR); 
 
-FlowEnvironment updateBreak(flowEnvironment(envC, envB, envR), map[loc,set[loc]] env)
-	= flowEnvironment(envC, updateEnvironment(envB, env), envR); 
+FlowEnvironment updateBreak(flowEnvironment(envC, envB, envR), State s)
+	= flowEnvironment(envC, s, envR); 
 
-FlowEnvironment updateReturn(flowEnvironment(envC, envB, envR), map[loc,set[loc]] env)
-	= flowEnvironment(envC, envB, updateEnvironment(envR, env)); 
+FlowEnvironment updateReturn(flowEnvironment(envC, envB, envR), State s)
+	= flowEnvironment(envC, envB, s); 
 
 FlowEnvironment mergeBreak(flowEnvironment(contEnv, brEnv, retEnv), map[loc,set[loc]] current)
 	= flowEnvironment(contEnv, merge(brEnv, current), retEnv);

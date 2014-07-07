@@ -266,10 +266,10 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	stmts += potential;
 	for(ex <- exceptions[e@decl] ? {}) {
 		if(ex in exs) {
-			exs[ex] = merge(exs[ex],env);
+			exs[ex] = merge(exs[ex],state(env,typesOf,acquireActions));
 		}
 		else{
-			exs[ex] = env;
+			exs[ex] = state(env,typesOf,acquireActions);
 		}
 	}
 	return <stmts, potential, env, typesOf, acquireActions, exs>;
@@ -296,7 +296,10 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 
 //this() cannot change so maybe it is not needed here, but we need the depedency for the synchronized
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:this(), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts) {
-	potential = addAndLock({Stmt::read(e@src, getClassDeclFromType(e@typ) + "/this", dep) | dep <- getDependenciesFromType(typesOf, getClassDeclFromType(e@typ))}, acquireActions);
+	potential = addAndLock({Stmt::read(e@src, getClassDeclFromType(e@typ) + "/this", dep) | dep <- getDependenciesFromType(typesOf, getClassDeclFromType(e@typ)) }, acquireActions);
+	if(potential == {}){
+		potential = addAndLock({Stmt::read(e@src, getClassDeclFromType(e@typ) + "/this", emptyId)}, acquireActions);
+	}
 	return <stmts, potential, env, typesOf, acquireActions, ()>;
 }
 

@@ -1,5 +1,5 @@
 module lang::sccfg::converter::util::TypeSensitiveEnvironment
-
+import IO;
 import lang::sccfg::ast::DataFlowLanguage;
 import lang::java::m3::TypeSymbol;
 

@@ -14,9 +14,11 @@ import lang::sccfg::ast::DataFlowLanguage;
 import lang::sccfg::converter::GatherStmtFromStatements;
 import lang::sccfg::converter::GatherStmtFromExpressions;
 
+import lang::sccfg::converter::util::State;
 import lang::sccfg::converter::util::Getters;
 import lang::sccfg::converter::util::ExceptionManagement;
 import lang::sccfg::converter::util::ContainersManagement;
+import lang::sccfg::converter::util::EnvironmentManagement;
 import lang::sccfg::converter::util::TypeSensitiveEnvironment;
 
 Program createDFG(loc project) = createDFG(createAstsFromEclipseProject(project, true));
@@ -83,15 +85,16 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		map[loc,TypeSensitiveEnvironment] typesOf = ( t : typeEnv(typesOfParam[t],{}) | t <- typesOfParam);
 		set[Stmt] methodStmts = {entryPoint(m@src, m@decl)};
 		rel[loc,loc] acquireActions = {};
+		FlowEnvironment fenv;
 		
 		top-down-break visit(b) {
 			case Expression e : <methodStmts, _, env, typesOf, acquireActions, _> = gatherStmtFromExpressions(e, env, typesOf, volatileFields, acquireActions, methodStmts);
-			case Statement s : <methodStmts, env, typesOf, acquireActions, _> = gatherStmtFromStatements(s, env, typesOf, volatileFields, acquireActions, methodStmts);
+			case Statement s : <methodStmts, env, typesOf, acquireActions, fenv, _> = gatherStmtFromStatements(s, env, typesOf, volatileFields, acquireActions, methodStmts);
 		}
 		//return environment
 		exitSrc = m@src;
 		exitSrc.offset = m@src.offset + m@src.length -1;
-		methodStmts += addAndLock({exitPoint(exitSrc, m@decl)}, acquireActions);
+		methodStmts += addAndLock({exitPoint(exitSrc, m@decl)}, acquireActions + getAcquireActions(getReturnState(fenv)));
 		result+= methodStmts;
 	}	
 	return result;
