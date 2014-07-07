@@ -41,14 +41,6 @@ map[loc,set[loc]] updateEnvironment(map[loc,set[loc]] env, map[loc,set[loc]] tem
 	return env;
 }
 
-map[loc,set[loc]] mergeNestedEnvironment(map[loc,set[loc]] env, map[loc,set[loc]] nested){
-	for(variable <- nested){
-		if(variable in env){
-			env[variable] = env[variable] + nested[variable];
-		}
-	}
-	return env;
-}
 
 FlowEnvironment mergeFlow(flowEnvironment(envC1, envB1, envR1), flowEnvironment(envC2, envB2, envR2))
 	= flowEnvironment(merge(envC1, envC2), merge(envB1, envB2), merge(envR1, envR2)); 

@@ -30,7 +30,7 @@ import lang::sccfg::converter::util::TypeSensitiveEnvironment;
 //	exs = mergeState(exs, exsM);
 //	//the volatile access from the message are not counted since if the message appears nothing else is going to be executed
 //	//The assert is a possible an exit point, in case of finally we can see it as a return
-//	env = mergeNestedEnvironment(env,envM);
+//	env = merge(env,envM);
 //	return <stmts, env, initializeReturnEnvironment(env), actionsInPath, initializeAcquireActionsFromReturn(actionsInExitPath), exs>;
 //}
 //
@@ -121,7 +121,7 @@ tuple[set[Stmt], map[loc, set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc
 //	<stmts, env, fenvInner, exsC> = gatherStmtFromStatements(m, b, env, volatileFields, acquireActions, stmts);
 //	exs = mergeState(exs,exsC);		
 //	//include continue
-//	env = mergeNestedEnvironment(env, getContinueEnvironment(fenvInner));
+//	env = merge(env, getContinueEnvironment(fenvInner));
 //			
 //	//running the condition after one loop getting all the connections from statements and continue command
 //	<stmts, potential, env, _> = gatherStmtFromExpressions(m, collection, env, volatileFields, acquireActions, stmts);
@@ -130,21 +130,19 @@ tuple[set[Stmt], map[loc, set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc
 //	//connect the statements with the condition but the environment and exception are already found
 //	<stmts, env, _, _> = gatherStmtFromStatements(m, b, env, volatileFields, acquireActions, stmts);
 //
-//	env = mergeNestedEnvironment(env, getBreakEnvironment(fenvInner));
+//	env = merge(env, getBreakEnvironment(fenvInner));
 //	
-//	return <stmts, mergeNestedEnvironment(outerEnv,env), emptyFlowEnvironment(), acquireActions, exs>;
+//	return <stmts, merge(outerEnv,env), emptyFlowEnvironment(), acquireActions, exs>;
 //}
 //
-////for(list[Expression] initializers, Expression condition, list[Expression] updaters, Statement body)
-//tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, rel[loc,loc], AcquireActionsPaths, map[str, State]] gatherStmtFromStatements(Declaration m, Statement s:\for(initializers, cond, updaters, body), map[loc, set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, rel[loc,loc] actionsInPath, set[Stmt] stmts){
-//	return dealWithLoopsConditionFirst(m, initializers, cond, updaters, body, env, volatileFields, acquireActions, stmts);
-//} 
-//
-////for(list[Expression] initializers, list[Expression] updaters, Statement body)
-//tuple[set[Stmt], map[loc, set[loc]], FlowEnvironment, rel[loc,loc], AcquireActionsPaths, map[str, State]] gatherStmtFromStatements(Declaration m, Statement s:\for(initializers, updaters, body), map[loc, set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, rel[loc,loc] actionsInPath, set[Stmt] stmts){
-//	return dealWithLoopsConditionFirst(m, initializers, Expression::\null(), updaters, body, env, volatileFields, acquireActions, stmts);
-//}
-//
+//for(list[Expression] initializers, Expression condition, list[Expression] updaters, Statement body)
+tuple[set[Stmt], map[loc, set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], FlowEnvironment, map[str, State]] gatherStmtFromStatements(Statement s:\for(initializers, cond, updaters, body), map[loc, set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts)
+	= dealWithLoopsConditionFirst(initializers, cond, updaters, body, env, typesOf, volatileFields, acquireActions, stmts);
+
+//for(list[Expression] initializers, list[Expression] updaters, Statement body)
+tuple[set[Stmt], map[loc, set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], FlowEnvironment, map[str, State]] gatherStmtFromStatements(Statement s:\for(initializers, updaters, body), map[loc, set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts)
+	= dealWithLoopsConditionFirst(initializers, Expression::\null(), updaters, body, env, typesOf, volatileFields, acquireActions, stmts);
+
 //expressionStatement(Expression stmt)
 tuple[set[Stmt], map[loc, set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], FlowEnvironment, map[str, State]] gatherStmtFromStatements(Statement s:\expressionStatement(e), map[loc, set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
 	<stmts, _, env, typesOf, acquireActions, exs> = gatherStmtFromExpressions(e, env, typesOf, volatileFields, acquireActions, stmts);
@@ -159,7 +157,7 @@ tuple[set[Stmt], map[loc, set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc
 	
 	<stmts, envOpt, typesOpt, acquireActionsThen, fenv, exsC> = gatherStmtFromStatements(thenB, env, typesOf, volatileFields, acquireActions, stmts);
 	exs = mergeExceptions(exs,exsC);
-	env = mergeNestedEnvironment(env,envOpt);
+	env = merge(env,envOpt);
 	typesOf = mergeTypesEnvironment(typesOf, typesOpt);
 	
 	return <stmts, env, typesOf, acquireActions + acquireActionsThen, fenv, exs>;
@@ -174,9 +172,7 @@ tuple[set[Stmt], map[loc, set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc
 	<stmtsIf,   envIf,   typesIf,   acquireActionsIf,   fenvIf,   exsIf> = gatherStmtFromStatements(thenB, env, typesOf, volatileFields, acquireActions, stmts);
 	<stmtsElse, envElse, typesElse, acquireActionsElse, fenvElse, exsElse> = gatherStmtFromStatements(elseB, env, typesOf, volatileFields, acquireActions, stmts);
 	
-	println(envIf);
-	println(envElse);
-	env = mergeNestedEnvironment(envIf,envElse);
+	env = merge(envIf,envElse);
 	typesOf = mergeTypesEnvironment(typesIf, typesElse);
 	fenv = mergeFlow(fenvIf, fenvElse);
 	exs = mergeExceptions(exsIf,exsElse);
@@ -293,13 +289,11 @@ tuple[set[Stmt], map[loc, set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc
 
 //synchronizedStatement(Expression lock, Statement body)
 tuple[set[Stmt], map[loc, set[loc]], map[loc,TypeSensitiveEnvironment], rel[loc,loc], FlowEnvironment, map[str, State]] gatherStmtFromStatements(Statement s:synchronizedStatement(l, body), map[loc, set[loc]] env, map[loc,TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
-	println(l);
 	<stmts, potential, env, typesOf, acquireActions, exs> = gatherStmtFromExpressions(l, env, typesOf, volatileFields, acquireActions, stmts);
 	stmts += potential;
 	acquireActions += extractAcquireActions(potential, volatileFields);
 	
 	loc vlock;
-	println(potential);
 	for(w:read(_, name, _) <- potential){
 		vlock = name;
 	}
@@ -420,41 +414,44 @@ tuple[set[Stmt], map[loc, set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc
 }
 
 //\while(Expression condition, Statement body)
-tuple[set[Stmt], map[loc, set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], FlowEnvironment, map[str, State]] gatherStmtFromStatements(Statement s:\while(cond, body), map[loc, set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
-	<stmts, potential, env, typesOf, acquireActions, exs> = gatherStmtFromExpressions(cond, env, typesOf, volatileFields, acquireActions, stmts);
-	stmts += potential;
-	acquireActions += extractAcquireActions(potential, volatileFields);
-	exitEnv = env;
-	exitTypesOf = typesOf;
-	exitAcquireActions = acquireActions;
-	exitExs = exs;
+tuple[set[Stmt], map[loc, set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], FlowEnvironment, map[str, State]] gatherStmtFromStatements(Statement s:\while(cond, body), map[loc, set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts)
+	= dealWithLoopsConditionFirst([], cond, [], body, env, typesOf, volatileFields, acquireActions, stmts);
 	
-	<stmts, envB, typesOfB, acquireActionsB, fenvB, exsB> = gatherStmtFromStatements(body, env, typesOf, volatileFields, acquireActions, stmts);
-	exitEnv = merge(exitEnv, getEnvironment(getBreakState(fenvB)));
-	exitTypesOf = mergeTypesEnvironment(exitTypesOf, getTypesEnvironment(getBreakState(fenvB)));
-	exitAcquireActions += getAcquireActions(getBreakState(fenvB));
-	exitExs = mergeExceptions(exitExs, exsB);
-
-	envB = merge(envB, getEnvironment(getContinueState(fenvB)));
-	typesOfB = mergeTypesEnvironment(exitTypesOf, getTypesEnvironment(getContinueState(fenvB)));
-	acquireActionsB += getAcquireActions(getContinueState(fenvB));
-	
-	<stmts, potential, env, typesOf, acquireActions, exs> = gatherStmtFromExpressions(cond, envB, typesOfB, volatileFields, acquireActionsB, stmts);
-	stmts += potential;
-	exitExs = mergeExceptions(exitExs, exs);
-	
-	exitEnv = merge(exitEnv, env);
-	exitTypesOf = mergeTypesEnvironment(exitTypesOf, typesOf);
-	exitAcquireActions += getAcquireActions(getBreakState(fenvB));
-	
-	<stmts, _, _, _, fenvB, exs> = gatherStmtFromStatements(body, env, typesOf, volatileFields, acquireActions, stmts);
-	exitEnv = mergeNestedEnvironment(exitEnv, getEnvironment(getBreakState(fenvB)));
-	exitTypesOf = mergeTypesEnvironment(exitTypesOf, getTypesEnvironment(getBreakState(fenvB)));
-	exitAcquireActions += getAcquireActions(getBreakState(fenvB));
-	exitExs = mergeExceptions(exitExs, exsB);
-	
-	return <stmts, exitEnv, exitTypesOf,  exitAcquireActions, initializeReturnState(getReturnState(fenvB)), exs>;
-}
+//{
+	//<stmts, potential, env, typesOf, acquireActions, exs> = gatherStmtFromExpressions(cond, env, typesOf, volatileFields, acquireActions, stmts);
+	//stmts += potential;
+	//acquireActions += extractAcquireActions(potential, volatileFields);
+	//exitEnv = env;
+	//exitTypesOf = typesOf;
+	//exitAcquireActions = acquireActions;
+	//exitExs = exs;
+	//
+	//<stmts, envB, typesOfB, acquireActionsB, fenvB, exsB> = gatherStmtFromStatements(body, env, typesOf, volatileFields, acquireActions, stmts);
+	//exitEnv = merge(exitEnv, getEnvironment(getBreakState(fenvB)));
+	//exitTypesOf = mergeTypesEnvironment(exitTypesOf, getTypesEnvironment(getBreakState(fenvB)));
+	//exitAcquireActions += getAcquireActions(getBreakState(fenvB));
+	//exitExs = mergeExceptions(exitExs, exsB);
+//
+	//envB = merge(envB, getEnvironment(getContinueState(fenvB)));
+	//typesOfB = mergeTypesEnvironment(exitTypesOf, getTypesEnvironment(getContinueState(fenvB)));
+	//acquireActionsB += getAcquireActions(getContinueState(fenvB));
+	//
+	//<stmts, potential, env, typesOf, acquireActions, exs> = gatherStmtFromExpressions(cond, envB, typesOfB, volatileFields, acquireActionsB, stmts);
+	//stmts += potential;
+	//exitExs = mergeExceptions(exitExs, exs);
+	//
+	//exitEnv = merge(exitEnv, env);
+	//exitTypesOf = mergeTypesEnvironment(exitTypesOf, typesOf);
+	//exitAcquireActions += getAcquireActions(getBreakState(fenvB));
+	//
+	//<stmts, _, _, _, fenvB, exs> = gatherStmtFromStatements(body, env, typesOf, volatileFields, acquireActions, stmts);
+	//exitEnv = merge(exitEnv, getEnvironment(getBreakState(fenvB)));
+	//exitTypesOf = mergeTypesEnvironment(exitTypesOf, getTypesEnvironment(getBreakState(fenvB)));
+	//exitAcquireActions += getAcquireActions(getBreakState(fenvB));
+	//exitExs = mergeExceptions(exitExs, exsB);
+	//
+	//return <stmts, exitEnv, exitTypesOf,  exitAcquireActions, initializeReturnState(getReturnState(fenvB)), exs>;
+//}
 
 //\expressionStatement(Expression stmt)
 tuple[set[Stmt], map[loc, set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], FlowEnvironment, map[str, State]] gatherStmtFromStatements(Statement s:expressionStatement(e), map[loc, set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
@@ -498,4 +495,51 @@ bool breakingControlFlow(Statement s:\return()) = true;
 bool breakingControlFlow(Statement s:\return(_)) = true;
 bool breakingControlFlow(Statement s:\throw(_)) = true;
 default bool breakingControlFlow(Statement s) =  false;
+
+tuple[set[Stmt], map[loc, set[loc]], map[loc,TypeSensitiveEnvironment], rel[loc,loc], FlowEnvironment, map[str, State]] dealWithLoopsConditionFirst(list[Expression] initializers, Expression cond, list[Expression] updaters, Statement body, map[loc, set[loc]] env, map[loc,TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc, loc] acquireActions, set[Stmt] stmts){
+	exs = ();
+	for(i <- initializers){
+		<stmts, _, env, typesOf, acquireActions, exs> = gatherStmtFromExpressions(i, env, typesOf, volatileFields, acquireActions, stmts);
+		exs = mergeExceptions(exs, exsC);
+	}
+	<stmts, potential, env, typesOf, acquireActions, exsC> = gatherStmtFromExpressions(cond, env, typesOf, volatileFields, acquireActions, stmts);
+	stmts += potential;
+	acquireActions += extractAcquireActions(potential, volatileFields);
+	exs = mergeExceptions(exs,exsC);
+	exitEnv = env;
+	exitTypesOf = typesOf;
+	exitAcquireActions = acquireActions;
+	exitExs = exs;
+	
+	<stmts, envB, typesOfB, acquireActionsB, fenvB, exsB> = gatherStmtFromStatements(body, env, typesOf, volatileFields, acquireActions, stmts);
+	exitEnv = merge(exitEnv, getEnvironment(getBreakState(fenvB)));
+	exitTypesOf = mergeTypesEnvironment(exitTypesOf, getTypesEnvironment(getBreakState(fenvB)));
+	exitAcquireActions += getAcquireActions(getBreakState(fenvB));
+	exitExs = mergeExceptions(exitExs, exsB);
+
+	envB = merge(envB, getEnvironment(getContinueState(fenvB)));
+	typesOfB = mergeTypesEnvironment(exitTypesOf, getTypesEnvironment(getContinueState(fenvB)));
+	acquireActionsB += getAcquireActions(getContinueState(fenvB));
+	
+	for(u <- updaters){
+		<stmts, _, envB, typesOfB, acquireActionsB, exsC> = gatherStmtFromExpressions(u, envB, typesOfB, volatileFields, acquireActionsB, stmts);
+		exitExs = mergeExceptions(exitExs, exsC);
+	}
+	
+	<stmts, potential, env, typesOf, acquireActions, exs> = gatherStmtFromExpressions(cond, envB, typesOfB, volatileFields, acquireActionsB, stmts);
+	stmts += potential;
+	exitExs = mergeExceptions(exitExs, exs);
+	
+	exitEnv = merge(exitEnv, env);
+	exitTypesOf = mergeTypesEnvironment(exitTypesOf, typesOf);
+	exitAcquireActions += getAcquireActions(getBreakState(fenvB));
+	
+	<stmts, _, _, _, fenvB, exs> = gatherStmtFromStatements(body, env, typesOf, volatileFields, acquireActions, stmts);
+	exitEnv = merge(exitEnv, getEnvironment(getBreakState(fenvB)));
+	exitTypesOf = mergeTypesEnvironment(exitTypesOf, getTypesEnvironment(getBreakState(fenvB)));
+	exitAcquireActions += getAcquireActions(getBreakState(fenvB));
+	exitExs = mergeExceptions(exitExs, exsB);
+	
+	return <stmts, exitEnv, exitTypesOf,  exitAcquireActions, initializeReturnState(getReturnState(fenvB)), exs>;
+}
 
