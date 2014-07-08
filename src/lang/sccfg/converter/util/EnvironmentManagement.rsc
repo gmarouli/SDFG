@@ -1,5 +1,7 @@
 module lang::sccfg::converter::util::EnvironmentManagement
 
+
+import lang::sccfg::ast::DataFlowLanguage;
 import lang::sccfg::converter::util::State;
 import lang::sccfg::converter::util::TypeSensitiveEnvironment;
 
@@ -7,12 +9,12 @@ data FlowEnvironment = flowEnvironment(State continueState, State breakState, St
 
 FlowEnvironment emptyFlowEnvironment() = flowEnvironment(emptyState(), emptyState(), emptyState());
 
-FlowEnvironment initializeContinueState(map[loc,set[loc]] env, map[loc,TypeSensitiveEnvironment] typesOf, rel[loc,loc] actions) 
-	= flowEnvironment(state(env, typesOf, actions), emptyState(), emptyState());
-FlowEnvironment initializeBreakState(map[loc,set[loc]] env, map[loc,TypeSensitiveEnvironment] typesOf, rel[loc,loc] actions) 
-	= flowEnvironment(emptyState(), state(env, typesOf, actions), emptyState());
-FlowEnvironment initializeReturnState(map[loc,set[loc]] env, map[loc,TypeSensitiveEnvironment] typesOf, rel[loc,loc] actions) 
-	= flowEnvironment(emptyState(), emptyState(), state(env, typesOf, actions));
+FlowEnvironment initializeContinueState(set[Stmt] stmts, map[loc,set[loc]] env, map[loc,TypeSensitiveEnvironment] typesOf, rel[loc,loc] actions) 
+	= flowEnvironment(state(stmts, env, typesOf, actions), emptyState(), emptyState());
+FlowEnvironment initializeBreakState(set[Stmt] stmts, map[loc,set[loc]] env, map[loc,TypeSensitiveEnvironment] typesOf, rel[loc,loc] actions) 
+	= flowEnvironment(emptyState(), state(stmts, env, typesOf, actions), emptyState());
+FlowEnvironment initializeReturnState(set[Stmt] stmts, map[loc,set[loc]] env, map[loc,TypeSensitiveEnvironment] typesOf, rel[loc,loc] actions) 
+	= flowEnvironment(emptyState(), emptyState(), state(stmts, env, typesOf, actions));
 	
 FlowEnvironment initializeContinueState(State s) 
 	= flowEnvironment(s, emptyState(), emptyState());
