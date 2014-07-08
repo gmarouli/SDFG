@@ -491,7 +491,7 @@ tuple[set[Stmt], map[loc, set[loc]], map[loc,TypeSensitiveEnvironment], rel[loc,
 	stmts += potential;
 	acquireActions += extractAcquireActions(potential, volatileFields);
 	exs = mergeExceptions(exs,exsC);
-	exitStmts += stmts;
+	exitStmts = stmts;
 	exitEnv = env;
 	exitTypesOf = typesOf;
 	exitAcquireActions = acquireActions;

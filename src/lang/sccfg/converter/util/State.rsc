@@ -10,7 +10,7 @@ data State = state(set[Stmt] stmts, map[loc, set[loc]] env, map[loc,TypeSensitiv
 State emptyState() = state({}, (), (), {});
 
 //Stmts
-set[Stmt] getStmts(state(stmts, _, _, _, _)) = stmts;
+set[Stmt] getStmts(state(stmts, _, _, _)) = stmts;
 //Environment
 map[loc, set[loc]] getEnvironment(state(_, env, _, _)) = env;
 
