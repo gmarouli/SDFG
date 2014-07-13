@@ -74,17 +74,17 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 	for (m:Declaration::method(_, _, parameters, ex, b) <- allMethods) {
 		
 		//determine lock
-		lrel[loc,loc] locks = [];
+		rel[loc,loc] locks = {};
 		for(Decl::method(id, _, l) <- decls){
 			if((id.path == m@decl.path) && (l != unlocked))
-				locks += [<m@src, l>];
+				locks += {<m@src, l>};
 		} 
 		//set up environment with parameters and fields
 		map[loc, set[loc]] env = ( p@decl : {p@src} | p <- parameters) + ( field : {emptyId} | field <- fieldsPerClass[extractClassName(m@decl)] ? {}) + ( field : {emptyId} | sc <- inheritingClasses[extractClassName(m@decl)] ? {}, field <- fieldsPerClass[sc] ? {});
 		map[loc, set[loc]] typesOfParam = index({ <getClassDeclFromType(p@typ),p@decl> | p <- parameters, isClass(p@typ)});
 		map[loc,TypeSensitiveEnvironment] typesOf = ( t : typeEnv(typesOfParam[t],{}) | t <- typesOfParam);
 		set[Stmt] methodStmts = {entryPoint(m@src, m@decl)};
-		rel[loc,loc] acquireActions = {};
+		rel[loc,loc] acquireActions = locks;
 		FlowEnvironment fenv;
 		
 		top-down-break visit(b) {
@@ -95,6 +95,9 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		exitSrc = m@src;
 		exitSrc.offset = m@src.offset + m@src.length -1;
 		methodStmts += addAndLock({exitPoint(exitSrc, m@decl)}, acquireActions + getAcquireActions(getReturnState(fenv)));
+		for(<src, l> <- locks){
+			methodStmts += addAndUnlock(methodStmts, src, l); 
+		}
 		result+= methodStmts;
 	}	
 	return result;

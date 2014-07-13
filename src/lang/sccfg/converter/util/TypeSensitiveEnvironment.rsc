@@ -35,7 +35,7 @@ set[loc] getDependenciesFromType(map[loc,TypeSensitiveEnvironment] typesOf, loc 
 set[loc] getDependencies(TypeSensitiveEnvironment t:typeEnv(_, deps)) = deps;
 
 map[loc,TypeSensitiveEnvironment] update(map[loc,TypeSensitiveEnvironment] typesOf, loc typ, loc src){
-	typesOf[typ] = setDependency(typesOf[typ], src);
+	typesOf[typ] = setDependency(typesOf[typ] ? emptyTypeSensitiveEnvironment(), src);
 	return typesOf;
 }
 
@@ -43,6 +43,9 @@ map[loc, TypeSensitiveEnvironment] addDeclOfType(map[loc, TypeSensitiveEnvironme
 	typesOf[typ] = addDecl(typesOf[typ] ? emptyTypeSensitiveEnvironment(), decl);
 	return typesOf;
 }
+
+default map[loc, TypeSensitiveEnvironment] addDeclOfType(map[loc, TypeSensitiveEnvironment] typesOf, loc decl, TypeSymbol t)
+	= typesOf;
 
 TypeSensitiveEnvironment addDecl(TypeSensitiveEnvironment t:typeEnv(decls, deps), decl)
 	= typeEnv(decls + {decl}, deps);

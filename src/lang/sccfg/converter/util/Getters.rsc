@@ -21,6 +21,7 @@ loc getIdFromStmt(Stmt::releaseLock(id, _, _)) = id;
 loc getIdFromStmt(Stmt::acquireLock(id, _, _)) = id;
 loc getIdFromStmt(Stmt::entryPoint(id, _)) = id;
 loc getIdFromStmt(Stmt::exitPoint(id, _)) = id;
+loc getIdFromStmt(Stmt::change(id, _, _)) = id;
 
 loc getDependencyFromStmt(Stmt::read(_, _, d)) = d;
 loc getDependencyFromStmt(Stmt::create(_, _, p)) = p;
@@ -42,6 +43,7 @@ loc getVarFromStmt(Stmt::releaseLock(_, var, _)) = var;
 loc getVarFromStmt(Stmt::acquireLock(_, var, _)) = var;
 loc getVarFromStmt(Stmt::entryPoint(_, var)) = var;
 loc getVarFromStmt(Stmt::exitPoint(_, var)) = var;
+loc getVarFromStmt(Stmt::change(_, var, _)) = var;
 
 set[Stmt] getSynchronizationActions(Program p)
 	= {s | s <- p.statements, !isDataAccess(s)};

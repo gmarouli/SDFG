@@ -484,7 +484,7 @@ default bool breakingControlFlow(Statement s) =  false;
 tuple[set[Stmt], map[loc, set[loc]], map[loc,TypeSensitiveEnvironment], rel[loc,loc], FlowEnvironment, map[str, State]] dealWithLoopsConditionFirst(list[Expression] initializers, Expression cond, list[Expression] updaters, Statement body, map[loc, set[loc]] env, map[loc,TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc, loc] acquireActions, set[Stmt] stmts){
 	exs = ();
 	for(i <- initializers){
-		<stmts, _, env, typesOf, acquireActions, exs> = gatherStmtFromExpressions(i, env, typesOf, volatileFields, acquireActions, stmts);
+		<stmts, _, env, typesOf, acquireActions, exsC> = gatherStmtFromExpressions(i, env, typesOf, volatileFields, acquireActions, stmts);
 		exs = mergeExceptions(exs, exsC);
 	}
 	<stmts, potential, env, typesOf, acquireActions, exsC> = gatherStmtFromExpressions(cond, env, typesOf, volatileFields, acquireActions, stmts);
