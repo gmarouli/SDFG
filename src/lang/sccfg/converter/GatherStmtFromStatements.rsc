@@ -394,6 +394,7 @@ tuple[set[Stmt], map[loc, set[loc]], map[loc,TypeSensitiveEnvironment], rel[loc,
 tuple[set[Stmt], map[loc, set[loc]], map[loc,TypeSensitiveEnvironment], rel[loc,loc], FlowEnvironment, map[str, State], map[str, State]] gatherStmtFromCatchStatements(Statement s:\catch(except, body), set[loc] volatileFields, map[str, State] exs){
 	env = ();
 	fenv = emptyFlowEnvironment();
+	exitStmts = {};
 	map[str, State] exsCatch = ();
 	map[loc, TypeSensitiveEnvironment] typesOf = ();
 	rel[loc,loc] acquireActions = {};
@@ -402,6 +403,7 @@ tuple[set[Stmt], map[loc, set[loc]], map[loc,TypeSensitiveEnvironment], rel[loc,
 			<exceptionState, exs> = getAndRemoveState(exs, e@decl.path);
 			if(!isEmpty(exceptionState)){
 				<stmts, envCatch, typesOfCatch, acquireActionsCatch, fenvCatch, exsC> = gatherStmtFromStatements(body, getEnvironment(exceptionState), getTypesEnvironment(exceptionState), volatileFields, getAcquireActions(exceptionState), getStmts(exceptionState));
+				exitStmts += stmts;
 				env = merge(env,envCatch);
 				typesOf = mergeTypesEnvironment(typesOf, typesOfCatch);
 				exsCatch = mergeExceptions(exsCatch, exsC);
@@ -413,7 +415,7 @@ tuple[set[Stmt], map[loc, set[loc]], map[loc,TypeSensitiveEnvironment], rel[loc,
 			}
 		}
 	}
-	return <stmts, env, typesOf, acquireActions, fenv, exs, exsCatch>;
+	return <exitStmts, env, typesOf, acquireActions, fenv, exs, exsCatch>;
 }
 
 //\declarationStatement(Declaration declaration)

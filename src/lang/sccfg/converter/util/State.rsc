@@ -1,6 +1,7 @@
 module lang::sccfg::converter::util::State
 
 import Map;
+import Set;
 
 import lang::sccfg::ast::DataFlowLanguage;
 import lang::sccfg::converter::util::TypeSensitiveEnvironment;

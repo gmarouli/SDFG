@@ -267,7 +267,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 			exs[ex] = merge(exs[ex],state(env,typesOf,acquireActions));
 		}
 		else{
-			exs[ex] = state(env,typesOf,acquireActions);
+			exs[ex] = state(stmts, env,typesOf,acquireActions);
 		}
 	}
 	return <stmts, potential, env, typesOf, acquireActions, exs>;
@@ -460,7 +460,7 @@ rel[loc, loc] extractAcquireActions(set[Stmt] potential, set[loc] volFields)
 	= { <id, var> |  read(id, var, _) <- potential, var in volFields};
 
 tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:simpleName(_), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf)
-	= <{change(e@src, getClassDeclFromType(e@typ), e@src)}, updateAll(env, getDeclsFromTypeEnv(typesOf[getClassDeclFromType(e@typ)]), e@src), update(typesOf, getClassDeclFromType(e@typ), e@src)>;
+	=  <{change(e@src, getClassDeclFromType(e@typ), e@src)}, updateAll(env, getDeclsFromTypeEnv(typesOf[getClassDeclFromType(e@typ)]?emptyTypeSensitiveEnvironment()), e@src), update(typesOf, getClassDeclFromType(e@typ), e@src)>;
 tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression q:qualifiedName(exp, name), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf) {
 	<newStmts, env, typesOf> = gatherChangedClasses(exp, env, typesOf);
 	return <{change(name@src, getClassDeclFromType(name@typ), name@src)} + newStmts, updateAll(env, getDeclsFromTypeEnv(typesOf[getClassDeclFromType(name@typ)] ? emptyTypeSensitiveEnvironment()), name@src), update(typesOf, getClassDeclFromType(name@typ), name@src)>;
