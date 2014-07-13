@@ -4,6 +4,7 @@ data Program = program(set[Decl] decls, set[Stmt] statements);
 
 public loc emptyId = |id:///|;
 public loc unlocked = |lock:///|;
+public loc indendentValue = |value:///|;
 
 data Decl 
 	= attribute(loc id, bool volatile)

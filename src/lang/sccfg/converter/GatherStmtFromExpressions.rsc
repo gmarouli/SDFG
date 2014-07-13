@@ -21,7 +21,9 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	stmts += indexRead;
 	acquireActions += extractAcquireActions(indexRead, volatileFields);
 	
-	potential = addAndLock({Stmt::read(ar@src, ar@decl, id) | id <- getDependencyIds(indexRead)}, acquireActions); //have to find the right read	
+	potential = addAndLock({Stmt::read(ar@src, ar@decl, id) | id <- getDependencyIds(indexRead)}
+						  +{Stmt::read(ar@src, ar@decl, id) | id <- gatherValues(index)}
+						   , acquireActions); //have to find the right read	
 	
 	return <stmts, potential, env, typesOf, acquireActions, exs>;
 }
@@ -45,13 +47,33 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	acquireActions += extractAcquireActions(potentialI, volatileFields);
 		
 	loc con = |java+constructor:///array|;
-	potential = addAndLock({create(e@src, con, id) | id <- getDependencyIds(potential)}, acquireActions);
+	potential = addAndLock({create(e@src, con, id) | id <- getDependencyIds(potential)}
+						  +{create(e@src, con, id) | id <- gatherValues(dimensions)}
+						  +{create(e@src, con, id) | id <- gatherValues(init)}
+						  , acquireActions);
+	if(potential == {})
+		potential = addAndLock(create(e@src, con, emptyId), acquireActions);
 	return <stmts, potential, env, typesOf, acquireActions, exs>;
 }
 
 //newArray(Type type, list[Expression] dimensions)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:newArray(t, dimensions), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts)
-	= gatherStmtFromExpressions(newArray(t, dimensions, Expression::null())[@typ = e@typ][@src = e@src], env, typesOf, volatileFields, acquireActions, stmts);
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:newArray(t, dimensions), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
+potential = {};
+	exs = ();
+	for(d <- dimensions) {
+		<stmts, potentialD, env, typesOf, acquireActions, exsD> = gatherStmtFromExpressions(d, env, typesOf, volatileFields, acquireActions, stmts);
+		exs = mergeExceptions(exs,exsD);
+		potential += potentialD;
+		stmts += potentialD;
+		acquireActions += extractAcquireActions(potentialD, volatileFields);
+	}
+		
+	loc con = |java+constructor:///array|;
+	potential = addAndLock({create(e@src, con, id) | id <- getDependencyIds(potential)}
+						  +{create(e@src, con, id) | id <- gatherValues(dimensions)}
+						  , acquireActions);
+	return <stmts, potential, env, typesOf, acquireActions, exs>;
+}
 
 //arrayInitializer(list[Expression] elements)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:arrayInitializer(list[Expression] elements), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts) {
@@ -74,6 +96,8 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	
 	set[Stmt] potentialReads = {};
 	exsRhs = ();
+	
+	set[loc] independentValues = gatherValues(rhs);
 	
 	if(operator != "=") {
 		<stmts, potentialWrites, env, typesOf, acquireActions, exsLhs> = gatherStmtFromExpressions(lhs, env, typesOf, volatileFields, acquireActions, stmts);
@@ -115,7 +139,9 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	if(var in volatileFields) 
 		stmts += addAndUnlock(stmts, lhs@src, var);
 		
-	stmts += addAndLock({Stmt::assign(e@src, var, id) | id <- getDependencyIds(potentialReads)}, acquireActions);
+	stmts += addAndLock({Stmt::assign(e@src, var, id) | id <- getDependencyIds(potentialReads)} 
+	                  + {Stmt::assign(e@src, var, id) | id <- independentValues}
+	                  , acquireActions);
 	env[var] = {e@src};
 	potential = addAndLock({Stmt::read(lhs@src, var, e@src)}, acquireActions);
 	return <stmts, potential, env, typesOf, acquireActions, mergeExceptions(exsLhs, exsRhs)>;
@@ -150,8 +176,11 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	
 	loc con = |java+constructor:///|;
 	con.path = e@decl.path ? "";
-	potential = addAndLock({create(e@src, con, id) | id <- getDependencyIds(potential)}, acquireActions);
-
+	potential = addAndLock({create(e@src, con, id) | id <- getDependencyIds(potential)}
+						  +{create(e@src, con, id) | id <- gatherValues(args)}
+						  , acquireActions);
+	if(potential == {})
+		potential = addAndLock({create(e@src, con, emptyId)}, acquireActions);
 	return <stmts, potential, env, typesOf, acquireActions, exs>;
 }
 
@@ -260,7 +289,13 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 		stmts += addAndLock(changed, acquireActions);	
 	}
 		
-	potential += addAndLock({Stmt::call(e@src, recSrc, e@decl, arg) | arg <- getDependencyIds(potential)}, acquireActions);
+	potential += addAndLock({Stmt::call(e@src, recSrc, e@decl, arg) | arg <- getDependencyIds(potential)}
+						   +{Stmt::call(e@src, recSrc, e@decl, arg) | arg <- gatherValues(args)}
+						   , acquireActions);
+						   
+	//if the method call does not have any arguments
+	if(potential == {})
+		potential = addAndLock({Stmt::call(e@src, recSrc, e@decl, emptyId)}, acquireActions);
 	stmts += potential;
 	for(ex <- exceptions[e@decl] ? {}) {
 		if(ex in exs) {
@@ -282,7 +317,9 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 		stmts += addAndUnlock(stmts, e@src, e@decl);
 	}
 	
-	stmts += addAndLock({Stmt::assign(e@src, e@decl, id) | id <- getDependencyIds(potential)}, acquireActions);
+	stmts += addAndLock({Stmt::assign(e@src, e@decl, id) | id <- getDependencyIds(potential)}
+					   +{Stmt::assign(e@src, e@decl, id) | id <- gatherValues(rhs)}
+					   , acquireActions);
 	env[e@decl] = {e@src};
 	return <stmts, {}, env, typesOf, acquireActions, exs>;
 }

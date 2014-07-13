@@ -1,12 +1,41 @@
 module lang::sccfg::converter::util::Getters
 
 import String;
-
+import Set;
 
 import lang::java::m3::TypeSymbol;
+import lang::java::jdt::m3::AST;
 
 import lang::sccfg::ast::DataFlowLanguage;
 
+set[loc] gatherValues(list[Expression] es)
+	= union({gatherValues(e) | e <- es});
+
+set[loc] gatherValues(Expression e:conditional(cond,ifB,elseB))
+	= gatherValues(cond) + gatherValues(ifB) + gatherValues(elseB);
+set[loc] gatherValues(Expression e:arrayInitializer(elements))
+	= gatherValues(elements);
+set[loc] gatherValues(Expression e:null())
+	= {indendentValue + "null"};
+set[loc] gatherValues(Expression e:number(n))
+	= {indendentValue + n};
+set[loc] gatherValues(Expression e:booleanLiteral(b)){
+	if(b)
+		return {indendentValue + "true"};
+	else
+		return {indendentValue + "false"};
+}
+set[loc] gatherValues(Expression e:stringLiteral(s))
+	= {indendentValue + s};
+set[loc] gatherValues(Expression e:infix(lhs, _, rhs, exts))
+	= gatherValues(lhs) + gatherValues(rhs) + gatherValues(exts);
+set[loc] gatherValues(Expression e:prefix(_, operand))
+	= gatherValues(operand);
+set[loc] gatherValues(Expression e:postfix(operand,_))
+	= gatherValues(operand);
+default set[loc] gatherValues(Expression e)
+	= {};
+	
 bool isDataAccess(Stmt s:acquireLock(_,_,_)) = false;
 bool isDataAccess(Stmt s:releaseLock(_,_,_)) = false;
 bool isDataAccess(Stmt s:entryPoint(_,_)) = false;
@@ -51,17 +80,11 @@ set[Stmt] getSynchronizationActions(Program p)
 str extractClassName(loc method) 
 	= substring(method.path,0,findLast(method.path,"/"));
 	
-set[loc] getDependencyIds(set[Stmt] potential){
-	if(potential == {}){
-		return {emptyId};
-	}
-	else{
-		return { id | Stmt::read(id, _, _) <- potential}
-			+  { id | Stmt::call(id, _, _) <- potential}
-			+  { id | Stmt::create(id, _, _) <- potential}
-			;	
-	}
-}
+set[loc] getDependencyIds(set[Stmt] potential)
+	= { id | Stmt::read(id, _, _) <- potential}
+	+  { id | Stmt::call(id, _, _) <- potential}
+	+  { id | Stmt::create(id, _, _) <- potential}
+	;	
 
 loc getClassDeclFromType(TypeSymbol c:class(decl, []))
 	= decl;
