@@ -425,7 +425,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 			stmts += addAndUnlock(stmts, e@src, operand@decl);
 		}
 		
-		stmts += addAndLock({Stmt::assign(e@src, operand@decl, id) | id <- getDependencyIds(potential)}, acquireActions);
+		stmts += addAndLock({Stmt::assign(e@src, operand@decl, |value:///1|)} + {Stmt::assign(e@src, operand@decl, id) | id <- getDependencyIds(potential)}, acquireActions);
 		
 		//potential was already found
 		env[operand@decl] = {e@src};
