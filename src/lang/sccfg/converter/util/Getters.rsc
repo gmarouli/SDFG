@@ -2,6 +2,7 @@ module lang::sccfg::converter::util::Getters
 
 import String;
 import Set;
+import IO;
 
 import lang::java::m3::TypeSymbol;
 import lang::java::jdt::m3::AST;
@@ -88,7 +89,13 @@ set[loc] getDependencyIds(set[Stmt] potential)
 
 loc getClassDeclFromType(TypeSymbol c:class(decl, []))
 	= decl;
-
+loc getClassDeclFromType(TypeSymbol c:interface(decl, [x])){
+	decl.path = decl.path + "\<" + getClassDeclFromType(x).path +"\>";
+	return decl;
+}
+default loc getClassDeclFromType(TypeSymbol c){
+	println(c);
+	}
 bool isClass(TypeSymbol c:class(_,_))
 	= true;
 default bool isClass(TypeSymbol c)

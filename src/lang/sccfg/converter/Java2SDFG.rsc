@@ -51,7 +51,7 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		+ [Declaration::method(simpleType(simpleName(n)), n, [], [], block(initialized[c@decl.path] ? []))[@decl=(c@decl)[scheme="java+constructor"] + "<n>()"][@src = c@src] | /c:class(n, _, _, b) <- asts, !(Declaration::constructor(_, _, _, _) <- b)]
 	;
 
-	allMethods = fixCollections(allMethods);
+	//allMethods = fixCollections(allMethods);
 	
 	allMethods = visit(allMethods) {
 		case declarationExpression(Declaration::class(_)) => Expression::null()

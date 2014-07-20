@@ -124,7 +124,7 @@ tuple[set[Stmt], map[loc, set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc
 	exitAcquireActions = acquireActions;
 	exitExs = exs;
 	
-	<stmts, envB, typesOfB, acquireActionsB, fenvB, exsB> = gatherStmtFromStatements(b, env, typesOf, volatileFields, acquireActions, stmts);
+	<stmts, envB, typesOfB, acquireActionsB, fenvB, exsB> = gatherStmtFromStatements(body, env, typesOf, volatileFields, acquireActions, stmts);
 	exitStmts += getStmts(getBreakState(fenvB));
 	exitEnv = merge(exitEnv, getEnvironment(getBreakState(fenvB)));
 	exitTypesOf = mergeTypesEnvironment(exitTypesOf, getTypesEnvironment(getBreakState(fenvB)));
@@ -144,7 +144,7 @@ tuple[set[Stmt], map[loc, set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc
 	exitTypesOf = mergeTypesEnvironment(exitTypesOf, typesOfB);
 	exitAcquireActions += acquireActionsB;
 	
-	<stmts, _, _, _, fenvB, exs> = gatherStmtFromStatements(b, envB, typesOfB, volatileFields, acquireActionsB, stmts);
+	<stmts, _, _, _, fenvB, exs> = gatherStmtFromStatements(body, envB, typesOfB, volatileFields, acquireActionsB, stmts);
 	exitStmts += getStmts(getBreakState(fenvB));
 	exitEnv = merge(exitEnv, getEnvironment(getBreakState(fenvB)));
 	exitTypesOf = mergeTypesEnvironment(exitTypesOf, getTypesEnvironment(getBreakState(fenvB)));
@@ -312,7 +312,6 @@ tuple[set[Stmt], map[loc, set[loc]], map[loc,TypeSensitiveEnvironment], rel[loc,
 	for(w:read(_, name, _) <- potential){
 		vlock = name;
 	}
-	
 	<stmts, env, typesOf, acquireActions, fenv, exsC> = gatherStmtFromStatements(body, env, typesOf, volatileFields, {<s@src, vlock>} + acquireActions, stmts);
 	
 	stmts += addAndUnlock(stmts, s@src, vlock);
