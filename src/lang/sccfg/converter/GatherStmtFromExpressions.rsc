@@ -248,7 +248,6 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 
 //instanceof(Expression leftside, Type rightSide)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:\instanceof(lhs,_), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts) {
-	iprintln(e);
 	<stmts, potential, env, typesOf, acquireActions, exs> = gatherStmtFromExpressions(lhs, env, typesOf, volatileFields, acquireActions, stmts);
 	stmts += potential;
 	acquireActions += extractAcquireActions(potential, volatileFields);
@@ -257,39 +256,31 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 
 //methodCall(bool isSuper, str name, list[Expression] arguments)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:methodCall(isSuper,name,args), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts)
-	= gatherStmtFromExpressions(methodCall(isSuper, Expression::this(), name, args)[@decl = e@decl][@typ = e@typ][@src = e@src], env, typesOf, volatileFields, acquireActions, stmts);
+	= gatherStmtFromExpressions(methodCall(isSuper, Expression::this()[@src = e@src][@typ = class(|java+class:///|+extractClassName(e@decl),[])], name, args)[@decl = e@decl][@typ = e@typ][@src = e@src], env, typesOf, volatileFields, acquireActions, stmts);
 
 //method(bool isSuper, Expression receiver, str name, list[Expression] arguments)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:methodCall(isSuper, receiver, name, args), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts) {
+	<stmts, potentialR, env, typesOf, acquireActions, exs> = gatherStmtFromExpressions(receiver, env, typesOf, volatileFields, acquireActions, stmts);
+	stmts += potentialR;
+	acquireActions += extractAcquireActions(potentialR, volatileFields);
+	
 	exs = ();
 	potential = {};
-	if(!(receiver := this())) {
-		<stmts, potentialR, env, typesOf, acquireActions, exs> = gatherStmtFromExpressions(receiver, env, typesOf, volatileFields, acquireActions, stmts);
-		stmts += potentialR;
-		acquireActions += extractAcquireActions(potential, volatileFields);
-	}
 	for(arg <- args) {
 		<stmts, potentialA, env, typesOf, acquireActions, exsA> = gatherStmtFromExpressions(arg, env, typesOf, volatileFields, acquireActions, stmts);
 		potential += potentialA;
-		stmts += potentialA;
+		stmts += addAndLock(potentialA, acquireActions);
 		acquireActions += extractAcquireActions(potentialA, volatileFields);
 		exs = mergeExceptions(exs,exsA);
 	}
+	<changed, env, typesOf> = gatherChangedClasses(receiver, env, typesOf);
+	stmts += addAndLock(changed, acquireActions);	
+	
 	loc recSrc;
-	if(receiver := this()) {
-		recSrc = e@src;
-		recSrc.offset += 1;
-		stmts += addAndLock({change(recSrc, |java+class:///|+extractClassName(e@decl), recSrc)} + {read(recSrc,|java+class:///|+extractClassName(e@decl)+"/this", dep) | dep <- getDependenciesFromType(typesOf, |java+class:///|+extractClassName(e@decl))}, acquireActions);
-		env = updateAll(env, getDeclsFromTypeEnv(typesOf[|java+class:///|+extractClassName(e@decl)] ? emptyTypeSensitiveEnvironment()), recSrc);
-		typesOf = update(typesOf, |java+class:///|+extractClassName(e@decl), recSrc);
-	}
-	else{
-		recSrc = receiver@src;
-		<changed, env, typesOf> = gatherChangedClasses(receiver, env, typesOf);
-		stmts += addAndLock(changed, acquireActions);	
-	}
-		
-	potential += addAndLock({Stmt::call(e@src, recSrc, e@decl, arg) | arg <- getDependencyIds(potential)}
+	for(r:read(id, _, _) <- potentialR){
+		recSrc = id;
+	} 		
+	potential = addAndLock({Stmt::call(e@src, recSrc, e@decl, arg) | arg <- getDependencyIds(potential)}
 						   +{Stmt::call(e@src, recSrc, e@decl, arg) | arg <- gatherValues(args)}
 						   , acquireActions);
 						   
