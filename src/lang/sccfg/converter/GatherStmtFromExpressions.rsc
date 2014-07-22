@@ -192,7 +192,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	typesOf = addDeclOfType(typesOf, q@decl, q@typ);
 	<stmts, potentialRead, env, typesOf, acquireActions, exsR> = gatherStmtFromExpressions(exp, env, typesOf, volatileFields, acquireActions, stmts);
 	potentialRead += addAndLock({read(addr, var, id) | Stmt::read(addr, var, _) <- potentialRead, id <- getDependencyIds(potential)}, acquireActions);
-
+	potentialRead -= {r | r:read(_,_,emptyId) <- potentialRead};
 	return <stmts, potentialRead, env, typesOf, acquireActions, exs>;
 }
 
