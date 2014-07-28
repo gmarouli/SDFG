@@ -1,14 +1,15 @@
-module lang::sccfg::converter::util::EnvironmentManagement
+module lang::sdfg::converter::util::EnvironmentManagement
 
+import lang::sdfg::ast::SynchronizedDataFlowGraphLanguage;
 
-import lang::sccfg::ast::DataFlowLanguage;
-import lang::sccfg::converter::util::State;
-import lang::sccfg::converter::util::TypeSensitiveEnvironment;
+import lang::sdfg::converter::util::State;
+import lang::sdfg::converter::util::TypeSensitiveEnvironment;
 
 data FlowEnvironment = flowEnvironment(State continueState, State breakState, State retState);
 
 FlowEnvironment emptyFlowEnvironment() = flowEnvironment(emptyState(), emptyState(), emptyState());
 
+//initializers
 FlowEnvironment initializeContinueState(set[Stmt] stmts, map[loc,set[loc]] env, map[loc,TypeSensitiveEnvironment] typesOf, rel[loc,loc] actions) 
 	= flowEnvironment(state(stmts, env, typesOf, actions), emptyState(), emptyState());
 FlowEnvironment initializeBreakState(set[Stmt] stmts, map[loc,set[loc]] env, map[loc,TypeSensitiveEnvironment] typesOf, rel[loc,loc] actions) 
@@ -23,10 +24,7 @@ FlowEnvironment initializeBreakState(State s)
 FlowEnvironment initializeReturnState(State s) 
 	= flowEnvironment(emptyState(), emptyState(), s);
 
-State getContinueState(flowEnvironment(env, _, _)) = env;
-State getBreakState(flowEnvironment(_, env, _)) = env;
-State getReturnState(flowEnvironment(_, _, env)) = env;
-
+//Update
 map[loc,set[loc]] updateAll(map[loc,set[loc]] env, set[loc] decls, loc dep){
 	for(d <- decls){
 		env[d] = {dep}; 
@@ -43,10 +41,6 @@ map[loc,set[loc]] updateEnvironment(map[loc,set[loc]] env, map[loc,set[loc]] tem
 	return env;
 }
 
-
-FlowEnvironment mergeFlow(flowEnvironment(envC1, envB1, envR1), flowEnvironment(envC2, envB2, envR2))
-	= flowEnvironment(merge(envC1, envC2), merge(envB1, envB2), merge(envR1, envR2)); 
-	
 FlowEnvironment updateContinue(flowEnvironment(envC, envB, envR), State s)
 	= flowEnvironment(s, envB, envR); 
 
@@ -56,6 +50,10 @@ FlowEnvironment updateBreak(flowEnvironment(envC, envB, envR), State s)
 FlowEnvironment updateReturn(flowEnvironment(envC, envB, envR), State s)
 	= flowEnvironment(envC, envB, s); 
 
+//Merge
+FlowEnvironment mergeFlow(flowEnvironment(envC1, envB1, envR1), flowEnvironment(envC2, envB2, envR2))
+	= flowEnvironment(merge(envC1, envC2), merge(envB1, envB2), merge(envR1, envR2)); 
+	
 FlowEnvironment mergeBreak(flowEnvironment(contEnv, brEnv, retEnv), map[loc,set[loc]] current)
 	= flowEnvironment(contEnv, merge(brEnv, current), retEnv);
 
@@ -64,3 +62,8 @@ FlowEnvironment mergeContinue(flowEnvironment(contEnv, brEnv, retEnv), map[loc,s
 	
 FlowEnvironment mergeReturn(flowEnvironment(contEnv, brEnv, retEnv), map[loc,set[loc]] current)
 	= flowEnvironment(contEnv, brEnv, merge(retEnv, current));
+	
+//Getters
+State getContinueState(flowEnvironment(env, _, _)) = env;
+State getBreakState(flowEnvironment(_, env, _)) = env;
+State getReturnState(flowEnvironment(_, _, env)) = env;

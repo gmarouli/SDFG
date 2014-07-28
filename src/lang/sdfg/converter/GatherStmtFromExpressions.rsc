@@ -1,17 +1,17 @@
-module lang::sccfg::converter::GatherStmtFromExpressions
+module lang::sdfg::converter::GatherStmtFromExpressions
 
 import IO;
 import String;
 import lang::java::jdt::m3::AST;
 import lang::java::m3::TypeSymbol;
 
-import lang::sccfg::ast::DataFlowLanguage;
+import lang::sdfg::ast::SynchronizedDataFlowGraphLanguage;
 
-import lang::sccfg::converter::util::State;
-import lang::sccfg::converter::util::Getters;
-import lang::sccfg::converter::util::ExceptionManagement;
-import lang::sccfg::converter::util::EnvironmentManagement;
-import lang::sccfg::converter::util::TypeSensitiveEnvironment;
+import lang::sdfg::converter::util::State;
+import lang::sdfg::converter::util::Getters;
+import lang::sdfg::converter::util::ExceptionManagement;
+import lang::sdfg::converter::util::EnvironmentManagement;
+import lang::sdfg::converter::util::TypeSensitiveEnvironment;
 
 //The functions are ordered according to the rascal/src/org/rascalImpl/library/lang/java/m3/AST.rsc [last accessed 13/5/2014]
 
@@ -21,9 +21,9 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	stmts += indexRead;
 	acquireActions += extractAcquireActions(indexRead, volatileFields);
 	
-	potential = addAndLock({Stmt::read(ar@src, ar@decl, id) | id <- getDependencyIds(indexRead)}
+	potential = addAndLock({Stmt::read(ar@src, ar@decl, id) | id <- getDataDependencyIds(indexRead)}
 						  +{Stmt::read(ar@src, ar@decl, id) | id <- gatherValues(index)}
-						   , acquireActions); //have to find the right read	
+						   , acquireActions); 
 	
 	return <stmts, potential, env, typesOf, acquireActions, exs>;
 }
@@ -47,7 +47,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	acquireActions += extractAcquireActions(potentialI, volatileFields);
 		
 	loc con = |java+constructor:///array|;
-	potential = addAndLock({create(e@src, con, id) | id <- getDependencyIds(potential)}
+	potential = addAndLock({create(e@src, con, id) | id <- getDataDependencyIds(potential)}
 						  +{create(e@src, con, id) | id <- gatherValues(dimensions)}
 						  +{create(e@src, con, id) | id <- gatherValues(init)}
 						  , acquireActions);
@@ -69,7 +69,7 @@ potential = {};
 	}
 		
 	loc con = |java+constructor:///array|;
-	potential = addAndLock({create(e@src, con, id) | id <- getDependencyIds(potential)}
+	potential = addAndLock({create(e@src, con, id) | id <- getDataDependencyIds(potential)}
 						  +{create(e@src, con, id) | id <- gatherValues(dimensions)}
 						  , acquireActions);
 	return <stmts, potential, env, typesOf, acquireActions, exs>;
@@ -86,11 +86,15 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 		stmts += potentialC;
 		acquireActions += extractAcquireActions(potentialC, volatileFields);
 	}
+	loc con = |java+constructor:///array|;
+	potential = addAndLock({create(e@src, con, id) | id <- getDataDependencyIds(potential)}
+						  , acquireActions);
 	return <stmts, potential, env, typesOf, acquireActions, exs>;
 }
 
 //assignment(Expression lhs, str operator, Expression rhs)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:assignment(lhs,operator,rhs), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts) {
+	iprintln(e);
 	set[Stmt] potentialWrites = {};
 	exsLhs = ();
 	
@@ -119,13 +123,22 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	
 	//Record the changes before locking the write
 	if(qualifiedName(qName, n) := lhs || fieldAccess(_, qName, _) := lhs || qName:fieldAccess(_, _) := lhs) {
-		<changed, env, typesOf> = gatherChangedClasses(qName, env, typesOf);
+		<changed, env, typesOf> = gatherChangedClasses(qName, env, typesOf, e@src);
 		stmts += addAndLock(changed, acquireActions);
 	}
-	else if(!isArrayAccess(lhs) && isField(lhs@decl)) {
+	else if(isArrayAccess(lhs)){
+		stmts += addAndLock({Stmt::change(e@src, getTypeDeclFromTypeSymbol(lhs@typ), dep) | dep <- getDataDependencyIds(potentialReads)}
+	                  	  + {Stmt::change(e@src, getTypeDeclFromTypeSymbol(lhs@typ), dep) | dep <- independentValues}
+						  , acquireActions);
+		env = updateAll(env, getDeclsFromTypeEnv(typesOf[getTypeDeclFromTypeSymbol(lhs@typ)] ? emptyTypeSensitiveEnvironment()), e@src);
+		typesOf = update(typesOf, getTypeDeclFromTypeSymbol(lhs@typ), e@src);
+		potential = addAndLock(potentialWrites, acquireActions);
+		return <stmts, potential, env, typesOf, acquireActions, mergeExceptions(exsLhs, exsRhs)>;
+	}
+	else if(isField(lhs@decl)) {
 		thisSrc = lhs@src;
 		thisSrc.offset += 1;
-		stmts += addAndLock({change(thisSrc, |java+class:///|+extractClassName(lhs@decl), thisSrc)} + {read(thisSrc,|java+class:///|+extractClassName(lhs@decl)+"/this", dep) | dep <- getDependenciesFromType(typesOf, |java+class:///|+extractClassName(lhs@decl))}, acquireActions);
+		stmts += addAndLock({change(thisSrc, |java+class:///|+extractClassName(lhs@decl), e@src)} + {read(thisSrc,|java+class:///|+extractClassName(lhs@decl)+"/this", dep) | dep <- getDependenciesFromType(typesOf, |java+class:///|+extractClassName(lhs@decl))}, acquireActions);
 		env = updateAll(env, getDeclsFromTypeEnv(typesOf[|java+class:///|+extractClassName(lhs@decl)] ? emptyTypeSensitiveEnvironment()), thisSrc);
 		typesOf = update(typesOf, |java+class:///|+extractClassName(lhs@decl), thisSrc);
 	}
@@ -139,7 +152,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	if(var in volatileFields) 
 		stmts += addAndUnlock(stmts, lhs@src, var);
 		
-	stmts += addAndLock({Stmt::assign(e@src, var, id) | id <- getDependencyIds(potentialReads)} 
+	stmts += addAndLock({Stmt::assign(e@src, var, id) | id <- getDataDependencyIds(potentialReads)} 
 	                  + {Stmt::assign(e@src, var, id) | id <- independentValues}
 	                  , acquireActions);
 	env[var] = {e@src};
@@ -176,7 +189,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	
 	loc con = |java+constructor:///|;
 	con.path = e@decl.path ? "";
-	potential = addAndLock({create(e@src, con, id) | id <- getDependencyIds(potential)}
+	potential = addAndLock({create(e@src, con, id) | id <- getDataDependencyIds(potential)}
 						  +{create(e@src, con, id) | id <- gatherValues(args)}
 						  , acquireActions);
 	if(potential == {})
@@ -191,7 +204,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	acquireActions += extractAcquireActions(potential, volatileFields);
 	typesOf = addDeclOfType(typesOf, q@decl, q@typ);
 	<stmts, potentialRead, env, typesOf, acquireActions, exsR> = gatherStmtFromExpressions(exp, env, typesOf, volatileFields, acquireActions, stmts);
-	potentialRead += addAndLock({read(addr, var, id) | Stmt::read(addr, var, _) <- potentialRead, id <- getDependencyIds(potential)}, acquireActions);
+	potentialRead += addAndLock({read(addr, var, id) | Stmt::read(addr, var, _) <- potentialRead, id <- getDataDependencyIds(potential)}, acquireActions);
 	potentialRead -= {r | r:read(_,_,emptyId) <- potentialRead};
 	return <stmts, potentialRead, env, typesOf, acquireActions, exs>;
 }
@@ -273,14 +286,14 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 		acquireActions += extractAcquireActions(potentialA, volatileFields);
 		exs = mergeExceptions(exs,exsA);
 	}
-	<changed, env, typesOf> = gatherChangedClasses(receiver, env, typesOf);
+	<changed, env, typesOf> = gatherChangedClasses(receiver, env, typesOf, e@src);
 	stmts += addAndLock(changed, acquireActions);	
 	
 	loc recSrc;
 	for(r:read(id, _, _) <- potentialR){
 		recSrc = id;
 	} 		
-	potential = addAndLock({Stmt::call(e@src, recSrc, e@decl, arg) | arg <- getDependencyIds(potential)}
+	potential = addAndLock({Stmt::call(e@src, recSrc, e@decl, arg) | arg <- getDataDependencyIds(potential)}
 						   +{Stmt::call(e@src, recSrc, e@decl, arg) | arg <- gatherValues(args)}
 						   , acquireActions);
 						   
@@ -308,7 +321,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 		stmts += addAndUnlock(stmts, e@src, e@decl);
 	}
 	
-	stmts += addAndLock({Stmt::assign(e@src, e@decl, id) | id <- getDependencyIds(potential)}
+	stmts += addAndLock({Stmt::assign(e@src, e@decl, id) | id <- getDataDependencyIds(potential)}
 					   +{Stmt::assign(e@src, e@decl, id) | id <- gatherValues(rhs)}
 					   , acquireActions);
 	env[e@decl] = {e@src};
@@ -322,9 +335,9 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 
 //this() cannot change so maybe it is not needed here, but we need the depedency for the synchronized
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:this(), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts) {
-	potential = addAndLock({Stmt::read(e@src, getClassDeclFromType(e@typ) + "/this", dep) | dep <- getDependenciesFromType(typesOf, getClassDeclFromType(e@typ)) }, acquireActions);
+	potential = addAndLock({Stmt::read(e@src, getTypeDeclFromTypeSymbol(e@typ) + "/this", dep) | dep <- getDependenciesFromType(typesOf, getTypeDeclFromTypeSymbol(e@typ)) }, acquireActions);
 	if(potential == {}){
-		potential = addAndLock({Stmt::read(e@src, getClassDeclFromType(e@typ) + "/this", emptyId)}, acquireActions);
+		potential = addAndLock({Stmt::read(e@src, getTypeDeclFromTypeSymbol(e@typ) + "/this", emptyId)}, acquireActions);
 	}
 	return <stmts, potential, env, typesOf, acquireActions, ()>;
 }
@@ -401,8 +414,17 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 		
 		//Record the changes before locking the write
 		if(qualifiedName(qName, n) := operand || fieldAccess(_, qName, _) := operand) {
-			<changed, env, typesOf> = gatherChangedClasses(qName, env, typesOf);
+			<changed, env, typesOf> = gatherChangedClasses(qName, env, typesOf,e@src);
 			stmts += addAndLock(changed, acquireActions);
+		}
+		else if(isArrayAccess(operand)){
+			stmts += addAndLock({Stmt::change(e@src, getTypeDeclFromTypeSymbol(operand@typ), dep) | dep <- getDataDependencyIds(potential)}
+	        	          	  + {Stmt::change(e@src, getTypeDeclFromTypeSymbol(operand@typ), |value:///1|)}
+							  , acquireActions);
+			env = updateAll(env, getDeclsFromTypeEnv(typesOf[getTypeDeclFromTypeSymbol(operand@typ)] ? emptyTypeSensitiveEnvironment()), e@src);
+			typesOf = update(typesOf, getTypeDeclFromTypeSymbol(operand@typ), e@src);
+			potential = addAndLock(potential, acquireActions);
+			return <stmts, potential, env, typesOf, acquireActions, exs>;
 		}
 		else if(isField(operand@decl)) {
 			thisSrc = operand@src;
@@ -411,12 +433,11 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 			env = updateAll(env, getDeclsFromTypeEnv(typesOf[|java+class:///|+extractClassName(operand@decl)]), thisSrc);
 			typesOf = update(typesOf, |java+class:///|+extractClassName(operand@decl), thisSrc);
 		}
-	
 		if(operand@decl in volatileFields) {
 			stmts += addAndUnlock(stmts, e@src, operand@decl);
 		}
 		
-		stmts += addAndLock({Stmt::assign(e@src, operand@decl, |value:///1|)} + {Stmt::assign(e@src, operand@decl, id) | id <- getDependencyIds(potential)}, acquireActions);
+		stmts += addAndLock({Stmt::assign(e@src, operand@decl, |value:///1|)} + {Stmt::assign(e@src, operand@decl, id) | id <- getDataDependencyIds(potential)}, acquireActions);
 		
 		//potential was already found
 		env[operand@decl] = {e@src};
@@ -437,8 +458,17 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 		
 		//Record the changes before locking the write
 		if(qualifiedName(qName, n) := operand || fieldAccess(_, qName, _) := operand) {
-			<changed, env, typesOf> = gatherChangedClasses(qName, env, typesOf);
+			<changed, env, typesOf> = gatherChangedClasses(qName, env, typesOf, e@src);
 			stmts += addAndLock(changed, acquireActions);
+		}
+		else if(isArrayAccess(operand)){
+			stmts += addAndLock({Stmt::change(e@src, getTypeDeclFromTypeSymbol(operand@typ), dep) | dep <- getDataDependencyIds(potential)}
+	        	          	  + {Stmt::change(e@src, getTypeDeclFromTypeSymbol(operand@typ), |value:///1|)}
+							  , acquireActions);
+			env = updateAll(env, getDeclsFromTypeEnv(typesOf[getTypeDeclFromTypeSymbol(operand@typ)] ? emptyTypeSensitiveEnvironment()), e@src);
+			typesOf = update(typesOf, getTypeDeclFromTypeSymbol(operand@typ), e@src);
+			potential = addAndLock(potential, acquireActions);
+			return <stmts, potential, env, typesOf, acquireActions, exs>;
 		}
 		else if(isField(operand@decl)) {
 			thisSrc = operand@src;
@@ -448,7 +478,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 			typesOf = update(typesOf, |java+class:///|+extractClassName(operand@decl), thisSrc);
 		}
 	
-		stmts += addAndLock({Stmt::assign(e@src, operand@decl, id) | id <- getDependencyIds(potential)}, acquireActions);
+		stmts += addAndLock({Stmt::assign(e@src, operand@decl, id) | id <- getDataDependencyIds(potential)}, acquireActions);
 		env[operand@decl] = {e@src};
 		
 		potential = addAndLock({Stmt::read(operand@src, operand@decl, e@src)}, acquireActions);
@@ -489,24 +519,24 @@ set[Stmt] addAndUnlock(set[Stmt] newStmts, loc idL, loc l) {
 rel[loc, loc] extractAcquireActions(set[Stmt] potential, set[loc] volFields)
 	= { <id, var> |  read(id, var, _) <- potential, var in volFields};
 
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:simpleName(_), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf)
-	=  <{change(e@src, getClassDeclFromType(e@typ), e@src)}, updateAll(env, getDeclsFromTypeEnv(typesOf[getClassDeclFromType(e@typ)]?emptyTypeSensitiveEnvironment()), e@src), update(typesOf, getClassDeclFromType(e@typ), e@src)>;
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression q:qualifiedName(exp, name), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf) {
-	<newStmts, env, typesOf> = gatherChangedClasses(exp, env, typesOf);
-	return <{change(name@src, getClassDeclFromType(name@typ), name@src)} + newStmts, updateAll(env, getDeclsFromTypeEnv(typesOf[getClassDeclFromType(name@typ)] ? emptyTypeSensitiveEnvironment()), name@src), update(typesOf, getClassDeclFromType(name@typ), name@src)>;
+tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:simpleName(_), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep)
+	=  <{change(e@src, getTypeDeclFromTypeSymbol(e@typ), dep)}, updateAll(env, getDeclsFromTypeEnv(typesOf[getTypeDeclFromTypeSymbol(e@typ)]?emptyTypeSensitiveEnvironment()), e@src), update(typesOf, getTypeDeclFromTypeSymbol(e@typ), e@src)>;
+tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression q:qualifiedName(exp, name), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep) {
+	<newStmts, env, typesOf> = gatherChangedClasses(exp, env, typesOf, dep);
+	return <{change(name@src, getTypeDeclFromTypeSymbol(name@typ), dep)} + newStmts, updateAll(env, getDeclsFromTypeEnv(typesOf[getTypeDeclFromTypeSymbol(name@typ)] ? emptyTypeSensitiveEnvironment()), name@src), update(typesOf, getTypeDeclFromTypeSymbol(name@typ), name@src)>;
 }
 
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:this(), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf)
-	= <{change(e@src, getClassDeclFromType(e@typ), e@src)}, updateAll(env, getDeclsFromTypeEnv(typesOf[getClassDeclFromType(e@typ)]?emptyTypeSensitiveEnvironment()), e@src), update(typesOf, getClassDeclFromType(e@typ), e@src)>;
+tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:this(), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep)
+	= <{change(e@src, getTypeDeclFromTypeSymbol(e@typ), dep)}, updateAll(env, getDeclsFromTypeEnv(typesOf[getTypeDeclFromTypeSymbol(e@typ)]?emptyTypeSensitiveEnvironment()), e@src), update(typesOf, getTypeDeclFromTypeSymbol(e@typ), e@src)>;
 	
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:fieldAccess(true, _), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf) {
+tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:fieldAccess(true, _), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep) {
 	superSrc = e@src;
 	superSrc.length = 5;
-	return <{change(superSrc, |java+class:///|+extractClassName(e@decl), superSrc)}, updateAll(env, getDeclsFromTypeEnv(typesOf[|java+class:///|+extractClassName(e@decl)]), superSrc), update(typesOf, |java+class:///|+extractClassName(e@decl), superSrc)>;
+	return <{change(superSrc, |java+class:///|+extractClassName(e@decl), dep)}, updateAll(env, getDeclsFromTypeEnv(typesOf[|java+class:///|+extractClassName(e@decl)]), superSrc), update(typesOf, |java+class:///|+extractClassName(e@decl), superSrc)>;
 }
 tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression f:fieldAccess(_, exp, name), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf) {
-	<newStmts, env, typesOf> = gatherChangedClasses(exp, env, typesOf);
-	return <{change(f@src, getClassDeclFromType(f@typ), f@src)} + newStmts, updateAll(env, getDeclsFromTypeEnv(typesOf[getClassDeclFromType(f@typ)]?emptyTypeSensitiveEnvironment()), f@src), update(typesOf, getClassDeclFromType(f@typ), f@src)>;
+	<newStmts, env, typesOf> = gatherChangedClasses(exp, env, typesOf, dep);
+	return <{change(f@src, getTypeDeclFromTypeSymbol(f@typ), dep)} + newStmts, updateAll(env, getDeclsFromTypeEnv(typesOf[getTypeDeclFromTypeSymbol(f@typ)]?emptyTypeSensitiveEnvironment()), f@src), update(typesOf, getTypeDeclFromTypeSymbol(f@typ), f@src)>;
 }
 
 bool isArrayAccess(Expression a:arrayAccess(_,_)) = true;

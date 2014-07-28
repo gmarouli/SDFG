@@ -1,25 +1,24 @@
-module lang::sccfg::converter::Java2SDFG
+module lang::sdfg::converter::Java2SDFG
 
 import IO;
 import Set;
-import Relation;
 import List;
 import String;
+import Relation;
 
 import lang::java::jdt::m3::AST;
 import lang::java::m3::TypeSymbol;
 
-import lang::sccfg::ast::DataFlowLanguage;
+import lang::sdfg::ast::SynchronizedDataFlowGraphLanguage;
 
-import lang::sccfg::converter::GatherStmtFromStatements;
-import lang::sccfg::converter::GatherStmtFromExpressions;
+import lang::sdfg::converter::GatherStmtFromStatements;
+import lang::sdfg::converter::GatherStmtFromExpressions;
 
-import lang::sccfg::converter::util::State;
-import lang::sccfg::converter::util::Getters;
-import lang::sccfg::converter::util::ExceptionManagement;
-import lang::sccfg::converter::util::ContainersManagement;
-import lang::sccfg::converter::util::EnvironmentManagement;
-import lang::sccfg::converter::util::TypeSensitiveEnvironment;
+import lang::sdfg::converter::util::State;
+import lang::sdfg::converter::util::Getters;
+import lang::sdfg::converter::util::ExceptionManagement;
+import lang::sdfg::converter::util::EnvironmentManagement;
+import lang::sdfg::converter::util::TypeSensitiveEnvironment;
 
 Program createDFG(loc project) = createDFG(createAstsFromEclipseProject(project, true));
 Program createDFG(set[Declaration] asts) {
@@ -50,8 +49,6 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		+ [Declaration::method(simpleType(simpleName(n)), n, p, e, Statement::block((initialized[extractClassName(m@decl)] ? []) + b))[@decl=m@decl][@src=m@src] | /m:Declaration::constructor(str n,p,e,  Statement::block(b)) <- asts]
 		+ [Declaration::method(simpleType(simpleName(n)), n, [], [], block(initialized[c@decl.path] ? []))[@decl=(c@decl)[scheme="java+constructor"] + "<n>()"][@src = c@src] | /c:class(n, _, _, b) <- asts, !(Declaration::constructor(_, _, _, _) <- b)]
 	;
-
-	//allMethods = fixCollections(allMethods);
 	
 	allMethods = visit(allMethods) {
 		case declarationExpression(Declaration::class(_)) => Expression::null()
@@ -84,7 +81,7 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		} 
 		//set up environment with parameters and fields
 		map[loc, set[loc]] env = ( p@decl : {p@src} | p <- parameters) + ( field : {emptyId} | field <- fieldsPerClass[extractClassName(m@decl)] ? {}) + ( field : {emptyId} | sc <- inheritingClasses[extractClassName(m@decl)] ? {}, field <- fieldsPerClass[sc] ? {});
-		map[loc, set[loc]] typesOfParam = index({ <getClassDeclFromType(p@typ),p@decl> | p <- parameters, isClass(p@typ)});
+		map[loc, set[loc]] typesOfParam = index({ <getTypeDeclFromTypeSymbol(p@typ),p@decl> | p <- parameters, isClass(p@typ)});
 		map[loc,TypeSensitiveEnvironment] typesOf = ( t : typeEnv(typesOfParam[t],{}) | t <- typesOfParam);
 		
 		rel[loc,loc] acquireActions = locks;

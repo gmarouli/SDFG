@@ -1,9 +1,9 @@
-module lang::sccfg::converter::util::ExceptionManagement
+module lang::sdfg::converter::util::ExceptionManagement
 
 import Map; 
 
-import lang::sccfg::converter::util::State;
-import lang::sccfg::converter::util::EnvironmentManagement;
+import lang::sdfg::converter::util::State;
+import lang::sdfg::converter::util::EnvironmentManagement;
 
 public map[loc, set[str]] exceptions = ();
 

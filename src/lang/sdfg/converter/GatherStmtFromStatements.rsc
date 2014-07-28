@@ -1,17 +1,15 @@
-module lang::sccfg::converter::GatherStmtFromStatements
-
-import IO;
+module lang::sdfg::converter::GatherStmtFromStatements
 
 import lang::java::jdt::m3::AST;
 
-import lang::sccfg::ast::DataFlowLanguage;
-import lang::sccfg::converter::GatherStmtFromExpressions;
+import lang::sdfg::ast::SynchronizedDataFlowGraphLanguage;
+import lang::sdfg::converter::GatherStmtFromExpressions;
 
-import lang::sccfg::converter::util::State;
-import lang::sccfg::converter::util::Getters;
-import lang::sccfg::converter::util::ExceptionManagement;
-import lang::sccfg::converter::util::EnvironmentManagement;
-import lang::sccfg::converter::util::TypeSensitiveEnvironment;
+import lang::sdfg::converter::util::State;
+import lang::sdfg::converter::util::Getters;
+import lang::sdfg::converter::util::ExceptionManagement;
+import lang::sdfg::converter::util::EnvironmentManagement;
+import lang::sdfg::converter::util::TypeSensitiveEnvironment;
 
 ////assert(Expression expression)
 //tuple[set[Stmt], map[loc,set[loc]], FlowEnvironment, rel[loc,loc], AcquireActionsPaths, map[str, State]] gatherStmtFromStatements(Declaration m, Statement s:\assert(exp), map[loc, set[loc]] env, set[loc] volatileFields, rel[loc,loc] acquireActions, rel[loc,loc] actionsInPath, set[Stmt] stmts){
