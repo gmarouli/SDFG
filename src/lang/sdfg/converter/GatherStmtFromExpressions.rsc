@@ -230,7 +230,11 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 		acquireActions += extractAcquireActions(potentialA, volatileFields);
 		exs = mergeExceptions(exs,exsA);
 	}
-	<changed, env, typesOf> = gatherChangedClasses(receiver, env, typesOf, e@src);
+	for(arg <- args) {
+		<changed, env, typesOf> = propagateChanges(arg, env, typesOf, e@src);
+		stmts += addAndLock(changed, acquireActions);
+	}
+	<changed, env, typesOf> = propagateChanges(receiver, env, typesOf, e@src);
 	stmts += addAndLock(changed, acquireActions);	
 	
 	loc recSrc;
