@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>Java2SCCFG</name>
+	<name>Java2SDFG</name>
 	<comment></comment>
 	<projects>
+		<project>rascal-refactoring</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
