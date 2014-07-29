@@ -72,7 +72,7 @@ default set[loc] gatherValues(Expression e)
 	
 
 set[Stmt] getSynchronizationActions(Program p)
-	= {s | s <- p.statements, isSyncDependency(s)};
+	= {s | s <- p.stmts, isSyncDependency(s)};
 	
 str extractClassName(loc method) 
 	= substring(method.path,0,findLast(method.path,"/"));
@@ -119,7 +119,7 @@ default bool isDataAccess(Stmt s) = true;
 
 bool isSyncDependency(Stmt s:acquireLock(_,_,_)) = true;
 bool isSyncDependency(Stmt s:releaseLock(_,_,_)) = true;
-default bool isDataAccess(Stmt s) = true;
+default bool isSyncDependency(Stmt s) = false;
 
 bool isClass(TypeSymbol c:class(_,_))
 	= true;
