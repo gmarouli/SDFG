@@ -1,5 +1,7 @@
 module lang::sdfg::converter::GatherStmtFromStatements
 
+import IO;
+
 import lang::java::jdt::m3::AST;
 
 import lang::sdfg::ast::SynchronizedDataFlowGraphLanguage;
