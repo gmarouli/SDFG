@@ -20,11 +20,10 @@ import lang::sdfg::converter::util::ExceptionManagement;
 import lang::sdfg::converter::util::EnvironmentManagement;
 import lang::sdfg::converter::util::TypeSensitiveEnvironment;
 
-Program createDFG(loc project) = createDFG(createAstsFromEclipseProject(project, true));
-Program createDFG(set[Declaration] asts) {
+Program createSDFG(loc project) = createSDFG(createAstsFromEclipseProject(project, true));
+Program createSDFG(set[Declaration] asts) {
 	decls = getDeclarations(asts);
 	stmts = getStatements(asts, decls);
-	iprintToFile(|file:///D:/object_flow_thesisspace/University/OFG/Student.ofg|, program(decls, stmts));
 	return program(decls, stmts);
 }
 
@@ -43,6 +42,7 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 	fieldsPerClass = (c@decl.path : {v@decl | field(t,frags) <- b, v <- frags}| /c:class(name, _, _, b) <- asts);
 	inheritingClasses = (c@decl.path : {sc@decl.path | simpleType(sc) <- extends}| /c:class(name, extends, _, b) <- asts);
 	
+	//Gather all methods and constructors
 	allMethods 
 		= [ m | /m:Declaration::method(_,_,_,_,_) <- asts]
 		+ [Declaration::method(t, n, p, e, empty())[@decl=m@decl][@src = m@src] | /m:Declaration::method(Type t,n,p,e) <- asts]
@@ -50,6 +50,7 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 		+ [Declaration::method(simpleType(simpleName(n)), n, [], [], block(initialized[c@decl.path] ? []))[@decl=(c@decl)[scheme="java+constructor"] + "<n>()"][@src = c@src] | /c:class(n, _, _, b) <- asts, !(Declaration::constructor(_, _, _, _) <- b)]
 	;
 	
+	//Flatten nested classes
 	allMethods = visit(allMethods) {
 		case declarationExpression(Declaration::class(_)) => Expression::null()
 		case declarationExpression(Declaration::class(_,_,_,_)) => Expression::null()
@@ -63,6 +64,7 @@ set[Stmt] getStatements(set[Declaration] asts, set[Decl] decls) {
 	set[Stmt] result = {};
 	set[loc] volatileFields = {vField | attribute(vField, true) <- decls};
 
+	//Gather exceptions
 	for (m:Declaration::method(_, _, _, ex, _) <- allMethods) {
 		if(ex != []){
 			exceptions[m@decl] = {e@decl.path | e <- ex};

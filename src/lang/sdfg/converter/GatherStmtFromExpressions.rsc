@@ -61,7 +61,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 }
 
 //newArray(Type type, list[Expression] dimensions)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:newArray(t, dimensions), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:newArray(t, dimensions), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts) {
 potential = {};
 	exs = ();
 	for(d <- dimensions) {
@@ -212,7 +212,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 }
 
 //methodCall(bool isSuper, str name, list[Expression] arguments)
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:methodCall(isSuper,name,args), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts){
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:methodCall(isSuper,name,args), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts) {
 	thisSrc = e@src;
 	thisSrc.offset = thisSrc.offset+1;
 	return gatherStmtFromExpressions(methodCall(isSuper, Expression::this()[@src = thisSrc][@typ = class(|java+class:///|+extractClassName(e@decl),[])], name, args)[@decl = e@decl][@typ = e@typ][@src = e@src], env, typesOf, volatileFields, acquireActions, stmts);
@@ -240,7 +240,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	stmts += addAndLock(changed, acquireActions);	
 	
 	loc recSrc;
-	for(r:read(id, _, _) <- potentialR){
+	for(r:read(id, _, _) <- potentialR) {
 		recSrc = id;
 	} 		
 	potential = addAndLock({Stmt::call(e@src, recSrc, e@decl, arg) | arg <- getDataDependencyIds(potential)}
@@ -286,7 +286,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 //this() cannot change so maybe it is not needed here, but we need the depedency for the synchronized
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:this(), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts) {
 	potential = addAndLock({Stmt::read(e@src, getTypeDeclFromTypeSymbol(e@typ) + "/this", dep) | dep <- getDependenciesFromType(typesOf, getTypeDeclFromTypeSymbol(e@typ)) }, acquireActions);
-	if(potential == {}){
+	if(potential == {}) {
 		potential = addAndLock({Stmt::read(e@src, getTypeDeclFromTypeSymbol(e@typ) + "/this", emptyId)}, acquireActions);
 	}
 	return <stmts, potential, env, typesOf, acquireActions, ()>;
@@ -395,86 +395,16 @@ default tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnv
 	//assert false : "Unknown expression <e>";
 	return <stmts, {}, env, typesOf, acquireActions, ()>;
 }
-
-
-
-set[Stmt] addAndLock(set[Stmt] newStmts, rel[loc,loc] acquireActions)
-	= newStmts + {Stmt::acquireLock(idL, l, getIdFromStmt(s)) | s <- newStmts, <idL, l> <- acquireActions};
-
-set[Stmt] addAndUnlock(set[Stmt] newStmts, loc idL, loc l) {
-	return newStmts + {Stmt::releaseLock(idL, l, getIdFromStmt(s)) | s <- newStmts};
-}
-rel[loc, loc] extractAcquireActions(set[Stmt] potential, set[loc] volFields)
-	= { <id, var> |  read(id, var, _) <- potential, var in volFields};
-
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:simpleName(_), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep){
-	changed = {};
-	if(isField(e@decl)){
-		thisSrc = e@src;
-		thisSrc.offset += 1;
-		changed += {change(thisSrc, |java+class:///|+extractClassName(e@decl), e@src)} + {read(thisSrc,|java+class:///|+extractClassName(e@decl)+"/this", dep) | dep <- getDependenciesFromType(typesOf, |java+class:///|+extractClassName(e@decl))};
-		env = updateAll(env, getDeclsFromTypeEnv(typesOf[|java+class:///|+extractClassName(e@decl)]?emptyTypeSensitiveEnvironment()), thisSrc);
-		typesOf = update(typesOf, |java+class:///|+extractClassName(e@decl), thisSrc);
-	}
-	changed += {change(e@src, getTypeDeclFromTypeSymbol(e@typ), dep)};
-	return  <changed, updateAll(env, getDeclsFromTypeEnv(typesOf[getTypeDeclFromTypeSymbol(e@typ)]?emptyTypeSensitiveEnvironment()), e@src), update(typesOf, getTypeDeclFromTypeSymbol(e@typ), e@src)>;
-}
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], loc] gatherChangedClasses(Expression q:qualifiedName(exp, name), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep) {
-	<newStmts, env, typesOf> = gatherChangedClasses(exp, env, typesOf, name@src);
-	return <{change(name@src, getTypeDeclFromTypeSymbol(name@typ), dep)} + newStmts, updateAll(env, getDeclsFromTypeEnv(typesOf[getTypeDeclFromTypeSymbol(name@typ)] ? emptyTypeSensitiveEnvironment()), name@src), update(typesOf, getTypeDeclFromTypeSymbol(name@typ), name@src)>;
-}
-
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:this(), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep)
-	= <{change(e@src, getTypeDeclFromTypeSymbol(e@typ), dep)}, updateAll(env, getDeclsFromTypeEnv(typesOf[getTypeDeclFromTypeSymbol(e@typ)]?emptyTypeSensitiveEnvironment()), e@src), update(typesOf, getTypeDeclFromTypeSymbol(e@typ), e@src)>;
 	
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:fieldAccess(true, _), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep) {
-	superSrc = e@src;
-	superSrc.length = 5;
-	return <{change(superSrc, |java+class:///|+extractClassName(e@decl), dep)}, updateAll(env, getDeclsFromTypeEnv(typesOf[|java+class:///|+extractClassName(e@decl)]), superSrc), update(typesOf, |java+class:///|+extractClassName(e@decl),e@src)>;
-}
-
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression e:fieldAccess(false, _), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep)
-	= <{change(e@src, |java+class:///|+extractClassName(e@decl), dep)}, updateAll(env, getDeclsFromTypeEnv(typesOf[|java+class:///|+extractClassName(e@decl)]), e@src), update(typesOf, |java+class:///|+extractClassName(e@decl))>;
-
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] gatherChangedClasses(Expression f:fieldAccess(_, exp, name), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep) {
-	<newStmts, env, typesOf> = gatherChangedClasses(exp, env, typesOf, f@src);
-	return <{change(f@src, getTypeDeclFromTypeSymbol(f@typ), dep)} + newStmts, updateAll(env, getDeclsFromTypeEnv(typesOf[getTypeDeclFromTypeSymbol(f@typ)]?emptyTypeSensitiveEnvironment()), f@src), update(typesOf, getTypeDeclFromTypeSymbol(f@typ), f@src)>;
-}
-
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] propagateChanges(Expression q:qualifiedName(qName, n), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep)
-	= gatherChangedClasses(qName, env, typesOf, n@src);
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] propagateChanges(Expression q:simpleName(_), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep){
-	changed = {};
-	if(isField(q@decl)){
-		thisSrc = q@src;
-		thisSrc.offset += 1;
-		changed += {change(thisSrc, |java+class:///|+extractClassName(q@decl), q@src)} + {read(thisSrc,|java+class:///|+extractClassName(q@decl)+"/this", dep) | dep <- getDependenciesFromType(typesOf, |java+class:///|+extractClassName(q@decl))};
-		env = updateAll(env, getDeclsFromTypeEnv(typesOf[|java+class:///|+extractClassName(q@decl)]?emptyTypeSensitiveEnvironment()), thisSrc);
-		typesOf = update(typesOf, |java+class:///|+extractClassName(q@decl), thisSrc);	
-	}
-	return <changed, env, typesOf>;
-}
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] propagateChanges(Expression f:fieldAccess(_, qName, _), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep)
-	= gatherChangedClasses(qName, env, typesOf, f@src);
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] propagateChanges(Expression qName:fieldAccess(_, _), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep)
-	= gatherChangedClasses(qName, env, typesOf, dep);
-tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] propagateChanges(Expression qName:arrayAccess(arr, _), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep)
-	= propagateChanges(arr, env, typesOf, arr@src);
-default tuple[set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment]] propagateChanges(Expression e, map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, loc dep)
-	= <{}, env, typesOf>;
-	
-tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] resolveAssignment(Expression target, Expression rhs, map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts, loc dep){
-	
-	set[loc] independentValues = gatherValues(rhs);
-	
+tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] resolveAssignment(Expression target, Expression rhs, map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts, loc dep) {
+	set[loc] independentValues = gatherValues(rhs);	
 	<stmts, potentialReads, env, typesOf, acquireActions, exsRhs> = gatherStmtFromExpressions(rhs, env, typesOf, volatileFields, acquireActions, stmts);	
 	stmts += potentialReads;
 	acquireActions += extractAcquireActions(potentialReads, volatileFields);
 		
 	<stmts, potentialWrites, env, typesOf, acquireActions, exsLhs> = gatherStmtFromExpressions(target, env, typesOf, volatileFields, acquireActions, stmts);
 	
-	
-	if(arrayAccess(arr,_) := target){
+	if(arrayAccess(arr,_) := target) {
 		decl = arr@decl;
 		<changed, env, typesOf> = propagateChanges(target, env, typesOf, dep);
 		stmts += addAndLock(changed
@@ -505,6 +435,3 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	return <stmts, potential, env, typesOf, acquireActions, mergeExceptions(exsLhs, exsRhs)>;
 	
 }
-
-bool isArrayAccess(Expression a:arrayAccess(_,_)) = true;
-default bool isArrayAccess(Expression lhs) = false;
