@@ -139,6 +139,8 @@ default bool isClass(TypeSymbol c)
 	= false;
 	
 bool isField(loc decl) = decl.scheme == "java+field";
+bool isParameter(loc decl) = decl.scheme == "java+parameter";
+bool isVariable(loc decl) = decl.scheme == "java+variable";
 
 
 bool isArrayAccess(Expression a:arrayAccess(_,_)) = true;

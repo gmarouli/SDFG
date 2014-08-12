@@ -217,7 +217,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	thisSrc.offset = thisSrc.offset+1;
 	return gatherStmtFromExpressions(methodCall(isSuper, Expression::this()[@src = thisSrc][@typ = class(|java+class:///|+extractClassName(e@decl),[])], name, args)[@decl = e@decl][@typ = e@typ][@src = e@src], env, typesOf, volatileFields, acquireActions, stmts);
 }
-//method(bool isSuper, Expression receiver, str name, list[Expression] arguments)
+//methodCall(bool isSuper, Expression receiver, str name, list[Expression] arguments)
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:methodCall(isSuper, receiver, name, args), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts) {
 	<stmts, potentialR, env, typesOf, acquireActions, exs> = gatherStmtFromExpressions(receiver, env, typesOf, volatileFields, acquireActions, stmts);
 	stmts += potentialR;
@@ -240,7 +240,21 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 	stmts += addAndLock(changed, acquireActions);	
 	
 	loc recSrc;
-	for(r:read(id, _, _) <- potentialR) {
+	for(r:read(id, var, _) <- potentialR) {
+		recSrc = id;
+		if(isField(var) || isParameter(var) || isVariable(var)){
+			stmts += addAndLock({change(id, getTypeDeclFromTypeSymbol(receiver@typ), e@src)}, acquireActions);
+			env = updateAll(env, getDeclsFromTypeEnv(typesOf[getTypeDeclFromTypeSymbol(receiver@typ)]?emptyTypeSensitiveEnvironment()), id);
+			typesOf = update(typesOf, getTypeDeclFromTypeSymbol(receiver@typ), id);	
+			break;
+		}
+	} 
+	<changed, env, typesOf> = propagateChanges(receiver, env, typesOf, e@src);
+	stmts += addAndLock(changed, acquireActions);	
+	for(r:create(id, _, _) <- potentialR) {
+		recSrc = id;
+	} 
+	for(r:call(id, _, _) <- potentialR) {
 		recSrc = id;
 	} 		
 	potential = addAndLock({Stmt::call(e@src, recSrc, e@decl, arg) | arg <- getDataDependencyIds(potential)}
@@ -275,6 +289,7 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 					   +{Stmt::assign(e@src, e@decl, id) | id <- gatherValues(rhs)}
 					   , acquireActions);
 	env[e@decl] = {e@src};
+	typesOf = addDeclOfType(typesOf, e@decl, e@typ);
 	return <stmts, {}, env, typesOf, acquireActions, exs>;
 }
 
@@ -285,9 +300,9 @@ tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment
 
 //this() cannot change so maybe it is not needed here, but we need the depedency for the synchronized
 tuple[set[Stmt], set[Stmt], map[loc,set[loc]], map[loc, TypeSensitiveEnvironment], rel[loc,loc], map[str, State]] gatherStmtFromExpressions(Expression e:this(), map[loc,set[loc]] env, map[loc, TypeSensitiveEnvironment] typesOf, set[loc] volatileFields, rel[loc,loc] acquireActions, set[Stmt] stmts) {
-	potential = addAndLock({Stmt::read(e@src, getTypeDeclFromTypeSymbol(e@typ) + "/this", dep) | dep <- getDependenciesFromType(typesOf, getTypeDeclFromTypeSymbol(e@typ)) }, acquireActions);
+	potential = addAndLock({Stmt::read(e@src, |java+parameter:///| + getTypeDeclFromTypeSymbol(e@typ).path + "/this", dep) | dep <- getDependenciesFromType(typesOf, getTypeDeclFromTypeSymbol(e@typ)) }, acquireActions);
 	if(potential == {}) {
-		potential = addAndLock({Stmt::read(e@src, getTypeDeclFromTypeSymbol(e@typ) + "/this", emptyId)}, acquireActions);
+		potential = addAndLock({Stmt::read(e@src, |java+parameter:///| + getTypeDeclFromTypeSymbol(e@typ).path + "/this", emptyId)}, acquireActions);
 	}
 	return <stmts, potential, env, typesOf, acquireActions, ()>;
 }

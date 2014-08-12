@@ -115,7 +115,7 @@ private loc determineLock(Declaration method){
 		}
 		else{
 			str lockPath = extractClassName(method@decl) + "/this";
-			lock = |java+class:///|+lockPath;
+			lock = |java+parameter:///|+lockPath;
 		}
 	}
 	return lock;
